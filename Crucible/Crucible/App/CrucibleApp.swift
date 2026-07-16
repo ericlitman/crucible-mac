@@ -26,7 +26,12 @@ private struct CrucibleRuntimeApp: App {
 
     init() {
         let presentation = PreviewHarness.initialPresentation()
-        _state = State(initialValue: AppState(initialPresentation: presentation))
+        let coordinator = presentation.isPreviewData ? nil : FleetRefreshCoordinator(client: ProcessCrucibleCLIClient())
+        _state = State(initialValue: AppState(
+            initialPresentation: presentation,
+            refreshCoordinator: coordinator,
+            automaticallyStarts: coordinator != nil
+        ))
     }
 
     var body: some Scene {

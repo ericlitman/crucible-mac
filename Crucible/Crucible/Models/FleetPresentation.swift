@@ -53,13 +53,7 @@ struct FleetPresentation: Equatable, Sendable {
         snapshot: nil,
         freshness: .unavailable,
         lastSuccessfulRefresh: nil,
-        errorMessage: "Live fleet data is not connected yet. A versioned Crucible CLI adapter will supply it in a later slice.",
+        errorMessage: "Waiting for the versioned Crucible CLI live-fleet response.",
         isPreviewData: false
     )
-}
-
-/// The only data-source seam in this foundation. CRUMAC-6 intentionally ships
-/// no production implementation and never invokes it.
-protocol FleetSnapshotProviding: Sendable {
-    func snapshot() async throws -> FleetSnapshot
 }

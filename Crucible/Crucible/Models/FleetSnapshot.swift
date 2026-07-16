@@ -7,6 +7,7 @@ enum WorkState: String, CaseIterable, Hashable, Identifiable, Sendable {
     case failed
     case blocked
     case stalled
+    case unknown
 
     var id: Self { self }
 
@@ -22,6 +23,7 @@ enum WorkState: String, CaseIterable, Hashable, Identifiable, Sendable {
         case .failed: "xmark.circle.fill"
         case .blocked: "hand.raised.circle.fill"
         case .stalled: "exclamationmark.octagon.fill"
+        case .unknown: "questionmark.circle.fill"
         }
     }
 }
@@ -45,36 +47,44 @@ enum HostCondition: String, Hashable, Sendable {
 }
 
 struct TokenBounds: Hashable, Sendable {
-    let soft: Int?
-    let hard: Int?
+    let soft: Double?
+    let hard: Double?
+}
+
+struct TimeBounds: Hashable, Sendable {
+    let softSeconds: TimeInterval?
+    let hardSeconds: TimeInterval?
 }
 
 struct LaneSnapshot: Hashable, Identifiable, Sendable {
     let id: String
     let name: String
     let state: WorkState
-    let currentStage: String
-    let elapsedSeconds: TimeInterval
+    let currentStage: String?
+    let elapsedSeconds: TimeInterval?
     let lastMeaningfulProgressAt: Date?
-    let retryCount: Int
-    let restartCount: Int
+    let retryCount: Int?
+    let restartCount: Int?
     let recoverableFailures: [String]
-    let tokenUse: Int
+    let tokenUse: Double?
     let tokenBounds: TokenBounds
-    let timeBoundSeconds: TimeInterval?
+    let timeBounds: TimeBounds
 }
 
 struct JobSnapshot: Hashable, Identifiable, Sendable {
     let id: String
+    let hostID: String?
     let title: String
     let state: WorkState
-    let currentStage: String
-    let elapsedSeconds: TimeInterval
+    let currentStage: String?
+    let elapsedSeconds: TimeInterval?
     let lastMeaningfulProgressAt: Date?
-    let retryCount: Int
-    let restartCount: Int
+    let retryCount: Int?
+    let restartCount: Int?
     let recoverableFailures: [String]
-    let tokenUse: Int
+    let tokenUse: Double?
+    let tokenBounds: TokenBounds
+    let timeBounds: TimeBounds
     let lanes: [LaneSnapshot]
 }
 
@@ -82,12 +92,13 @@ struct HostSnapshot: Hashable, Identifiable, Sendable {
     let id: String
     let displayName: String
     let condition: HostCondition
-    let activeLaneCount: Int
-    let laneCapacity: Int
+    let activeLaneCount: Int?
+    let laneCapacity: Int?
     let jobs: [JobSnapshot]
 
     var capacityLabel: String {
-        "\(activeLaneCount)/\(laneCapacity) lanes"
+        guard let activeLaneCount, let laneCapacity else { return "capacity unknown" }
+        return "\(activeLaneCount)/\(laneCapacity) lanes"
     }
 }
 
@@ -103,8 +114,33 @@ struct FleetSnapshot: Hashable, Sendable {
     let sourceTimestamp: Date
     let queue: [QueueItemSnapshot]
     let hosts: [HostSnapshot]
+    let jobs: [JobSnapshot]
+    let conditions: [FleetConditionSnapshot]
+    private let contractStateCounts: [WorkState: Int]?
+
+    init(
+        contractVersion: String,
+        sourceTimestamp: Date,
+        queue: [QueueItemSnapshot],
+        hosts: [HostSnapshot],
+        jobs: [JobSnapshot]? = nil,
+        conditions: [FleetConditionSnapshot] = [],
+        stateCounts: [WorkState: Int]? = nil
+    ) {
+        self.contractVersion = contractVersion
+        self.sourceTimestamp = sourceTimestamp
+        self.queue = queue
+        self.hosts = hosts
+        let hostedJobs = hosts.flatMap(\.jobs)
+        let suppliedJobs = jobs ?? []
+        var seenJobIDs = Set<String>()
+        self.jobs = (hostedJobs + suppliedJobs).filter { seenJobIDs.insert($0.id).inserted }
+        self.conditions = conditions
+        contractStateCounts = stateCounts
+    }
 
     var stateCounts: [WorkState: Int] {
+        if let contractStateCounts { return contractStateCounts }
         var result = Dictionary(uniqueKeysWithValues: WorkState.allCases.map { ($0, 0) })
         for item in queue {
             result[item.state, default: 0] += 1
@@ -119,5 +155,9 @@ struct FleetSnapshot: Hashable, Sendable {
     func host(id: String?) -> HostSnapshot? {
         guard let id else { return nil }
         return hosts.first { $0.id == id }
+    }
+
+    func job(id: String) -> JobSnapshot? {
+        jobs.first { $0.id == id }
     }
 }

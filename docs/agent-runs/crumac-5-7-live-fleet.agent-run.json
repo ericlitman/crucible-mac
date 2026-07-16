@@ -1,0 +1,156 @@
+{
+  "agent_run_format_version": "0.1",
+  "run_id": "crumac-5-7-live-fleet",
+  "agent": {
+    "name": "Codex",
+    "version": "GPT-5"
+  },
+  "product_spec": {
+    "path": "docs/product-specs/live-fleet-observability.product-spec.md",
+    "spec_revision": 2,
+    "content_hash": "sha256:b818b22aa9c5057987b4664bc6b4393a2515d1028647bcecc24af8f372bda33b"
+  },
+  "started_at": "2026-07-16T16:14:30.156Z",
+  "completed_at": "2026-07-16T16:15:07Z",
+  "status": "completed",
+  "checked_items": [
+    {
+      "item_id": "AC-1",
+      "status": "passed",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible/pull/500",
+          "title": "Versioned read-only live-fleet CLI contract"
+        },
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/7",
+          "title": "Fixed-path CLI-only app integration"
+        }
+      ],
+      "notes": "The app directly spawns only /Users/ericlitman/.local/bin/operator-supervisor with live-fleet --contract-version 1 --format json. Boundary scans and process tests prove there is no shell, PATH lookup, direct host connection, SSH invocation, or controller-artifact read in the app."
+    },
+    {
+      "item_id": "AC-2",
+      "status": "passed",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible/pull/500",
+          "title": "Fleet and queue snapshot contract"
+        },
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/7",
+          "title": "Live menu and dashboard presentation"
+        }
+      ],
+      "notes": "The strict v1 snapshot carries all configured and observed hosts, queue jobs and lanes, counts for active, waiting, completed, failed, blocked, stalled, and unknown work, and explicit completeness metadata. Contract and app suites cover complete, partial, stale, unavailable, and monitor-only work."
+    },
+    {
+      "item_id": "AC-3",
+      "status": "passed",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible/pull/500",
+          "title": "Truthful host, job, lane, bounds, attempt, and failure data"
+        },
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/7",
+          "title": "Progressive live detail presentation"
+        }
+      ],
+      "notes": "Host, job, and lane details preserve every available lifecycle, stage, elapsed, last-progress, retry, restart, recoverable-failure, time-bound, token-bound, token-use, and source-timestamp field. Focused tests cover job-level bounds, bounds-only details, and independently available retry or restart counts. Live in-flight token usage and configured token bounds are intentionally null until CRUMAC-10 adds an authoritative attempt-bound source; the app does not infer them."
+    },
+    {
+      "item_id": "AC-4",
+      "status": "passed",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/7",
+          "title": "Foreground and background refresh policy"
+        }
+      ],
+      "notes": "Tests prove an exact 300-second background cadence, a 60-second foreground cadence, and immediate refresh when the menu or dashboard appears. README documents the 3.05667-second measured fresh CLI sample that selected 60 seconds and a release guardrail to relax it if a fresh sample exceeds 10 seconds."
+    },
+    {
+      "item_id": "AC-5",
+      "status": "not_checked",
+      "notes": "The CLI now emits stable, actionable stalled and time-bound condition identities, but macOS notification delivery is CRUMAC-8 follow-up work. Token-bound conditions remain blocked by CRUMAC-10's missing live attempt-bound telemetry."
+    },
+    {
+      "item_id": "AC-6",
+      "status": "not_checked",
+      "notes": "Notification modes and unchanged-condition deduplication remain CRUMAC-8 follow-up work."
+    },
+    {
+      "item_id": "AC-7",
+      "status": "passed",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible/pull/500",
+          "title": "Typed freshness, completeness, and error envelopes"
+        },
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/7",
+          "title": "Last-known-state retention and error presentation"
+        }
+      ],
+      "notes": "Fixtures and reducer tests prove unavailable, incompatible, stale, and incomplete results retain the last successful snapshot, label it non-live, preserve last-success time, and surface useful typed errors without substituting preview data. A DEBUG-only incompatible proof state preserves the fleet and source timestamp while remaining distinct from stale and launch-failed presentations; it is excluded from Release builds."
+    },
+    {
+      "item_id": "AC-8",
+      "status": "passed",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/6",
+          "title": "Approved app and template menu-bar artwork"
+        },
+        {
+          "type": "linear_issue",
+          "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-6/bootstrap-the-native-menu-bar-shell-and-fixture-backed-fleet-overview",
+          "title": "Light and dark menu-surface proof"
+        }
+      ],
+      "notes": "Carried forward from the completed CRUMAC-6 Agent Run: approved app artwork and a derived transparent template icon are integrated and proven legible in light and dark appearances."
+    },
+    {
+      "item_id": "AC-9",
+      "status": "not_checked",
+      "notes": "Signing, distribution, and Sparkle updates remain CRUMAC-9 follow-up work."
+    },
+    {
+      "item_id": "AC-10",
+      "status": "not_checked",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible/pull/500",
+          "title": "Five canonical CLI contract fixtures and 42 passing tests"
+        },
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/7",
+          "title": "Strict parser, refresh, state, process, and view-model tests"
+        }
+      ],
+      "notes": "Five byte-identical CLI response fixtures cover healthy, stale, incomplete, incompatible, and failed states. Fifty-one AppKit-free app tests cover strict parsing, duplicate keys, process lifecycle, refresh cadence, state retention, selection, proof-state isolation, and view models; strict Release build and packaged-app smoke verification pass. Alert deduplication is not implemented, so the criterion is intentionally not claimed."
+    },
+    {
+      "item_id": "SM-1",
+      "status": "not_checked",
+      "notes": "The zero-unnoticed-stall outcome requires launch, CRUMAC-8 notifications, and a seven-day measurement window."
+    }
+  ],
+  "drift": {
+    "detected": false
+  },
+  "completion_claim": "This execution completes only the CRUMAC-5 and CRUMAC-7 live-observability slice: a deployed versioned read-only CLI contract, a strict CLI-only macOS consumer, truthful current fleet and queue detail, 60-second foreground and 300-second background refresh, explicit freshness and last-known-state behavior, automated validation, and runtime proof. It claims AC-1, AC-2, AC-3, AC-4, and AC-7; AC-8 remains passed from CRUMAC-6. Notifications, notification deduplication, live token telemetry, queue management, historical reporting, configuration, signing and updates, and the post-launch success metric remain explicitly not checked."
+}

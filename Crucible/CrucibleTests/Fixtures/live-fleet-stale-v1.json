@@ -1,0 +1,19 @@
+{
+  "schema": "crucible.live-fleet.snapshot.v1",
+  "contract_version": 1,
+  "generated_at": "2026-07-16T12:20:00.000Z",
+  "source_observed_at": "2026-07-16T12:00:00.000Z",
+  "controller_generation": "0123456789abcdef0123456789abcdef01234567",
+  "freshness": { "state": "stale", "age_seconds": 1200, "stale_after_seconds": 600 },
+  "completeness": { "state": "partial", "reasons": ["queue_heartbeat_stale"], "host_coverage": { "expected": 1, "observed": 1, "available": 1 }, "jobs_truncated": false },
+  "sources": {
+    "queue": { "path": "/state/queue", "observed_at": "2026-07-16T12:00:00.000Z", "schema": "crucible.session-orchestrator.supervisor-queue.v1" },
+    "monitor": { "path": "/state/monitor.json", "observed_at": "2026-07-16T12:00:00.000Z", "schema": "crucible.session-orchestrator.production-rollout.monitor.v1", "refresh": { "mode": "cached", "attempted": false, "status": "cached", "duration_ms": 0, "coalesced": false, "error": null } },
+    "capacity": { "path": "/state/capacity.json", "observed_at": "2026-07-16T12:20:00.000Z", "schema": "crucible.crabrunner.host-capacity.v1" }
+  },
+  "counts": { "hosts": 1, "queues": 1, "jobs": { "total": 0, "active": 0, "waiting": 0, "completed": 0, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 }, "lanes": { "total": 0, "active": 0, "waiting": 0, "completed": 0, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 }, "conditions": 1 },
+  "hosts": [{ "id": "pro16", "address": "pro16.local", "transport": "crabbox-ssh", "state": "available", "observed_at": "2026-07-16T12:00:00.000Z", "capacity": { "configured_lane_limit": 10, "reported_limit": 10, "active": 0, "queue_depth": 0 }, "counts": { "active": 0, "terminal": 0, "total": 0, "by_state": { "active": 0, "waiting": 0, "completed": 0, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 } }, "jobs_truncated": false, "resources": null, "pressure": null, "alerts": [], "error": null }],
+  "queues": [{ "id": "/state/queue", "observed_at": "2026-07-16T12:00:00.000Z", "heartbeat": { "state": "ok", "at": "2026-07-16T12:00:00.000Z", "next_tick_at": "2026-07-16T12:01:00.000Z" }, "counts": { "active": 0, "waiting": 0, "completed": 0, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 }, "job_ids": [] }],
+  "jobs": [],
+  "conditions": [{ "id": "source_stale:0000000000000000", "type": "source_stale", "affected": { "host_id": null, "job_id": null, "lane_id": null }, "first_observed_at": "2026-07-16T12:10:00.000Z", "last_observed_at": "2026-07-16T12:20:00.000Z", "severity": "error", "actual": 1200, "bound": 600, "action": "refresh_monitor_source" }]
+}

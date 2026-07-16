@@ -14,6 +14,8 @@ enum PreviewHarness {
     static let errorArgument = "--preview-error"
 
     #if DEBUG
+    static let incompatibleArgument = "--preview-incompatible"
+
     enum ProofSurface: String, Equatable {
         case menu
         case dashboard
@@ -55,6 +57,9 @@ enum PreviewHarness {
             return .productionUnavailable
         }
 
+        if arguments.contains(incompatibleArgument) {
+            return PreviewFixtures.incompatiblePresentation
+        }
         if arguments.contains(errorArgument) {
             return PreviewFixtures.failedPresentation
         }

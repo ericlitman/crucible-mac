@@ -1,0 +1,22 @@
+{
+  "schema": "crucible.live-fleet.snapshot.v1",
+  "contract_version": 1,
+  "generated_at": "2026-07-16T12:00:05.000Z",
+  "source_observed_at": "2026-07-16T12:00:00.000Z",
+  "controller_generation": null,
+  "freshness": { "state": "fresh", "age_seconds": 5, "stale_after_seconds": 600 },
+  "completeness": { "state": "partial", "reasons": ["capacity_source_unavailable", "host_jobs_truncated:pro16", "host_unavailable:studio1", "monitor_refresh_partial"], "host_coverage": { "expected": 2, "observed": 2, "available": 1 }, "jobs_truncated": true },
+  "sources": {
+    "queue": { "path": "/state/queue", "observed_at": "2026-07-16T12:00:04.000Z", "schema": "crucible.session-orchestrator.supervisor-queue.v1" },
+    "monitor": { "path": "/state/monitor.json", "observed_at": "2026-07-16T12:00:00.000Z", "schema": "crucible.session-orchestrator.production-rollout.monitor.v1", "refresh": { "mode": "fresh", "attempted": true, "status": "partial", "duration_ms": 2760, "coalesced": false, "error": "one or more hosts were unavailable" } },
+    "capacity": { "path": "/state/capacity.json", "observed_at": null, "schema": null }
+  },
+  "counts": { "hosts": 2, "queues": 1, "jobs": { "total": 0, "active": 0, "waiting": 0, "completed": 0, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 }, "lanes": { "total": 0, "active": 0, "waiting": 0, "completed": 0, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 }, "conditions": 0 },
+  "hosts": [
+    { "id": "pro16", "address": "pro16.local", "transport": "crabbox-ssh", "state": "available", "observed_at": "2026-07-16T12:00:00.000Z", "capacity": { "configured_lane_limit": 10, "reported_limit": null, "active": 10, "queue_depth": 2 }, "counts": { "active": 10, "terminal": 4327, "total": 4337, "by_state": { "active": 10, "waiting": 0, "completed": 4327, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 } }, "jobs_truncated": true, "resources": null, "pressure": null, "alerts": [], "error": null },
+    { "id": "studio1", "address": "studio1.local", "transport": "crabbox-ssh", "state": "unavailable", "observed_at": "2026-07-16T12:00:00.000Z", "capacity": { "configured_lane_limit": 10, "reported_limit": null, "active": null, "queue_depth": null }, "counts": { "active": null, "terminal": null, "total": null, "by_state": { "active": 0, "waiting": 0, "completed": 0, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 } }, "jobs_truncated": false, "resources": null, "pressure": null, "alerts": [], "error": "runtime_generation_unavailable" }
+  ],
+  "queues": [{ "id": "/state/queue", "observed_at": "2026-07-16T12:00:04.000Z", "heartbeat": { "state": "ok", "at": "2026-07-16T12:00:04.000Z", "next_tick_at": "2026-07-16T12:01:04.000Z" }, "counts": { "active": 0, "waiting": 0, "completed": 0, "failed": 0, "blocked": 0, "stalled": 0, "unknown": 0 }, "job_ids": [] }],
+  "jobs": [],
+  "conditions": []
+}

@@ -8,9 +8,10 @@ struct FleetOverviewTests {
         let overview = FleetOverview(snapshot: PreviewFixtures.fleet)
 
         #expect(Set(overview.stateCounts.keys) == Set(WorkState.allCases))
-        for state in WorkState.allCases {
+        for state in WorkState.allCases where state != .unknown {
             #expect(overview.count(for: state) == 1)
         }
+        #expect(overview.count(for: .unknown) == 0)
     }
 
     @Test("Overview keeps every fixture host and queue item")
@@ -25,7 +26,7 @@ struct FleetOverviewTests {
     @Test("Work state labels remain explicit and non-color dependent")
     func workStateLabels() {
         #expect(WorkState.allCases.map(\.title) == [
-            "Active", "Waiting", "Completed", "Failed", "Blocked", "Stalled",
+            "Active", "Waiting", "Completed", "Failed", "Blocked", "Stalled", "Unknown",
         ])
         #expect(WorkState.allCases.allSatisfy { !$0.symbolName.isEmpty })
     }
