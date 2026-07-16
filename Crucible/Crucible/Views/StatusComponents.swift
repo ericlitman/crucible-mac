@@ -9,6 +9,7 @@ extension WorkState {
         case .failed: .red
         case .blocked: .orange
         case .stalled: .purple
+        case .unknown: .secondary
         }
     }
 }
@@ -21,6 +22,60 @@ extension HostCondition {
         case .degraded: .orange
         case .offline: .secondary
         }
+    }
+}
+
+extension FleetConditionSeverity {
+    var tint: Color {
+        switch self {
+        case .info: .blue
+        case .warning: .orange
+        case .error, .critical: .red
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .info: "info.circle.fill"
+        case .warning: "exclamationmark.triangle.fill"
+        case .error: "xmark.octagon.fill"
+        case .critical: "exclamationmark.octagon.fill"
+        }
+    }
+}
+
+struct FleetConditionRow: View {
+    let condition: FleetConditionSnapshot
+    var compact = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: condition.severity.symbolName)
+                .foregroundStyle(condition.severity.tint)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: compact ? 1 : 4) {
+                Text(condition.title)
+                    .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                if !condition.affectedLabel.isEmpty {
+                    Text(condition.affectedLabel)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                if let actual = condition.actual, let bound = condition.bound {
+                    Text("Observed \(actual.formatted()) · bound \(bound.formatted())")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !compact, let action = condition.action {
+                    Text(action)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(condition.severity.rawValue), \(condition.title), \(condition.affectedLabel)")
     }
 }
 
@@ -51,10 +106,12 @@ struct FreshnessView: View {
                     .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
 
                 if let sourceDate = presentation.freshness.sourceDate {
-                    Text(sourceDate, format: .dateTime.month(.abbreviated).day().hour().minute())
+                    Text("Source \(sourceDate.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                } else if let lastSuccess = presentation.lastSuccessfulRefresh {
+                }
+
+                if !presentation.freshness.isCurrent, let lastSuccess = presentation.lastSuccessfulRefresh {
                     Text("Last successful refresh \(lastSuccess.formatted(.relative(presentation: .named)))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -147,10 +204,10 @@ enum FleetFormat {
         return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
     }
 
-    static func tokens(_ value: Int) -> String {
+    static func tokens(_ value: Double) -> String {
         if value >= 1_000 {
-            return String(format: "%.1fK", Double(value) / 1_000)
+            return String(format: "%.1fK", value / 1_000)
         }
-        return "\(value)"
+        return value.formatted(.number.precision(.fractionLength(0)))
     }
 }

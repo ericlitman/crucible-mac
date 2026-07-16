@@ -25,6 +25,7 @@ enum PreviewFixtures {
                 jobs: [
                     JobSnapshot(
                         id: "CRU-142",
+                        hostID: "forge-01",
                         title: "Parallel build lanes",
                         state: .active,
                         currentStage: "Implement",
@@ -47,7 +48,7 @@ enum PreviewFixtures {
                                 recoverableFailures: ["SwiftPM cache miss recovered"],
                                 tokenUse: 31_880,
                                 tokenBounds: TokenBounds(soft: 100_000, hard: 150_000),
-                                timeBoundSeconds: 1_800
+                                timeBounds: TimeBounds(softSeconds: nil, hardSeconds: 1_800)
                             ),
                             LaneSnapshot(
                                 id: "review",
@@ -61,7 +62,7 @@ enum PreviewFixtures {
                                 recoverableFailures: [],
                                 tokenUse: 0,
                                 tokenBounds: TokenBounds(soft: 50_000, hard: 80_000),
-                                timeBoundSeconds: 1_200
+                                timeBounds: TimeBounds(softSeconds: nil, hardSeconds: 1_200)
                             ),
                         ]
                     ),
@@ -84,6 +85,7 @@ enum PreviewFixtures {
                 jobs: [
                     JobSnapshot(
                         id: "CRU-140",
+                        hostID: "forge-03",
                         title: "Dependency audit",
                         state: .blocked,
                         currentStage: "Investigate",
@@ -106,7 +108,7 @@ enum PreviewFixtures {
                                 recoverableFailures: ["Registry timeout recovered", "Lock contention recovered"],
                                 tokenUse: 92_110,
                                 tokenBounds: TokenBounds(soft: 100_000, hard: 150_000),
-                                timeBoundSeconds: 3_600
+                                timeBounds: TimeBounds(softSeconds: nil, hardSeconds: 3_600)
                             ),
                         ]
                     ),
@@ -121,6 +123,7 @@ enum PreviewFixtures {
                 jobs: [
                     JobSnapshot(
                         id: "CRU-141",
+                        hostID: "forge-04",
                         title: "Release investigation",
                         state: .stalled,
                         currentStage: "Test",
@@ -143,11 +146,27 @@ enum PreviewFixtures {
                                 recoverableFailures: ["Agent resumed after transport failure"],
                                 tokenUse: 144_810,
                                 tokenBounds: TokenBounds(soft: 120_000, hard: 180_000),
-                                timeBoundSeconds: 3_600
+                                timeBounds: TimeBounds(softSeconds: nil, hardSeconds: 3_600)
                             ),
                         ]
                     ),
                 ]
+            ),
+        ],
+        jobs: [
+            JobSnapshot(
+                id: "CRU-143",
+                hostID: nil,
+                title: "Awaiting capacity",
+                state: .waiting,
+                currentStage: nil,
+                elapsedSeconds: nil,
+                lastMeaningfulProgressAt: nil,
+                retryCount: 0,
+                restartCount: 0,
+                recoverableFailures: [],
+                tokenUse: nil,
+                lanes: []
             ),
         ]
     )
@@ -170,7 +189,7 @@ enum PreviewFixtures {
 
     static let failedPresentation = FleetPresentation(
         snapshot: fleet,
-        freshness: .unavailable,
+        freshness: .stale(asOf: sourceTimestamp),
         lastSuccessfulRefresh: sourceTimestamp,
         errorMessage: "Previewing a CLI launch failure while preserving the last known snapshot.",
         isPreviewData: true

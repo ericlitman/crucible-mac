@@ -1,9 +1,23 @@
 # Crucible.app
 
 Crucible.app is a native, menu-bar-only macOS operator surface for the Crucible
-fleet. The current foundation implements the fixture-backed CRUMAC-6 vertical
-slice governed by `docs/product-specs/live-fleet-observability.product-spec.md`
-revision 2 (partial AC-2, the asset portion of AC-8, and partial AC-10).
+fleet. CRUMAC-7 connects the CRUMAC-6 interface to the versioned, read-only
+live-fleet contract governed by
+`docs/product-specs/live-fleet-observability.product-spec.md` revision 2.
+
+The production data path is deliberately narrow:
+
+```text
+/Users/ericlitman/.local/bin/operator-supervisor
+  live-fleet --contract-version 1 --format json
+    -> strict v1 parser -> refresh coordinator -> AppState -> SwiftUI
+```
+
+The app does not use a shell, search `PATH`, connect to a host, read controller
+artifacts, or reconstruct fleet semantics. A complete fresh snapshot replaces
+state. Stale, incomplete, incompatible, and failed responses are labelled and
+retain the best truthful prior snapshot without inventing unavailable token
+usage or bounds.
 
 ## Development
 
@@ -19,8 +33,14 @@ xcodebuild test \
   -derivedDataPath .build/DerivedData
 ```
 
-The normal Debug launch intentionally starts without fleet data. For local UI
-inspection only, opt into the DEBUG-only, clearly labelled fixture harness:
+The normal Debug and Release launches invoke the installed CLI immediately,
+again when the menu or dashboard appears, every 60 seconds while either surface
+is visible, and no more frequently than every 300 seconds in the background.
+The 60-second choice follows the CRUMAC-5 measured fresh-read sample (3.05667s)
+and should move to 120 seconds if the release load sample exceeds 10 seconds.
+
+For local UI inspection only, opt into the DEBUG-only, clearly labelled fixture
+harness:
 
 ```sh
 CRUCIBLE_PREVIEW_DATA=1 ./script/build_and_run.sh
@@ -41,8 +61,7 @@ open -n .build/DerivedData/Build/Products/Debug/Crucible.app \
 Both surfaces support `light` or `dark`. The proof launcher, arguments, and
 fixture payload are DEBUG-only and absent from Release builds.
 
-Release builds exclude the fixture payload and never fall back to preview data.
-There is no CLI invocation, refresh loop, direct host connection, networking,
-or production data adapter in this slice. Future fleet I/O remains owned by the
-versioned Crucible CLI contract described in
+Release builds exclude the preview payload and never fall back to fake data.
+The five CRUMAC-5 contract fixtures remain test-target-only. Fleet I/O remains
+owned by the versioned Crucible CLI contract described in
 `docs/design/codexbar-alignment.md`.

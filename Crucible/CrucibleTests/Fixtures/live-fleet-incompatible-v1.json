@@ -1,0 +1,6 @@
+{
+  "schema": "crucible.live-fleet.error.v1",
+  "contract_version": 2,
+  "generated_at": "2026-07-16T12:00:05.000Z",
+  "error": { "code": "unsupported_contract_version", "kind": "incompatible", "message": "unsupported live-fleet contract version: 2", "retryable": false, "source": null }
+}

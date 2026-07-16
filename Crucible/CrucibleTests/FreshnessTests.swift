@@ -23,7 +23,7 @@ struct FreshnessTests {
         #expect(stale.lastSuccessfulRefresh == PreviewFixtures.sourceTimestamp)
         #expect(stale.errorMessage?.contains("stale") == true)
         #expect(failed.snapshot == PreviewFixtures.fleet)
-        #expect(failed.freshness == .unavailable)
+        #expect(failed.freshness == .stale(asOf: PreviewFixtures.sourceTimestamp))
         #expect(failed.errorMessage?.contains("failure") == true)
     }
 

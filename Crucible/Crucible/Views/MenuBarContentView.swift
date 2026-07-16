@@ -28,6 +28,11 @@ struct MenuBarContentView: View {
                 if state.presentation.isPreviewData {
                     PreviewDataBadge()
                 }
+                if state.isRefreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Refreshing fleet")
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 13)
@@ -49,6 +54,16 @@ struct MenuBarContentView: View {
                         LazyVGrid(columns: metricColumns, spacing: 7) {
                             ForEach(WorkState.allCases) { workState in
                                 StateCountCard(state: workState, count: overview.count(for: workState))
+                            }
+                        }
+
+                        if !snapshot.conditions.isEmpty {
+                            sectionHeader("Conditions", count: snapshot.conditions.count)
+
+                            VStack(spacing: 8) {
+                                ForEach(snapshot.conditions) { condition in
+                                    FleetConditionRow(condition: condition, compact: true)
+                                }
                             }
                         }
 
@@ -74,23 +89,31 @@ struct MenuBarContentView: View {
 
                         VStack(spacing: 5) {
                             ForEach(overview.queue) { item in
-                                HStack(spacing: 8) {
-                                    Image(systemName: item.state.symbolName)
-                                        .foregroundStyle(item.state.tint)
-                                        .frame(width: 16)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(item.id)
-                                            .font(.caption.weight(.semibold))
-                                        Text(item.title)
-                                            .font(.caption)
+                                Button {
+                                    state.selectJob(item.id)
+                                    state.dashboardRequested()
+                                    openWindow(id: "fleet-dashboard")
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: item.state.symbolName)
+                                            .foregroundStyle(item.state.tint)
+                                            .frame(width: 16)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(item.id)
+                                                .font(.caption.weight(.semibold))
+                                            Text(item.title)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer(minLength: 4)
+                                        Text(item.state.title)
+                                            .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                            .lineLimit(1)
                                     }
-                                    Spacer(minLength: 4)
-                                    Text(item.state.title)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityHint("Opens job detail in the dashboard")
                                 .accessibilityElement(children: .combine)
                             }
                         }
@@ -116,6 +139,9 @@ struct MenuBarContentView: View {
         .frame(width: 370)
         .onAppear {
             state.menuBarDidAppear()
+        }
+        .onDisappear {
+            state.menuBarDidDisappear()
         }
     }
 
