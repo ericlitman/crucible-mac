@@ -28,7 +28,7 @@ Acceptance criteria should be supported by screenshots.
 ```productspec-scope
 in:
   - Live visibility into the state of the crucible queue.This should show all states of the lifecycle of a job Together with visibility into the details of each job.
-  - Aggregated and per host statistics on the ongoing operations of the pipeline (token
+  - Aggregated and per host statistics on the ongoing operations of the pipeline.
   - Configuration of hosts, lanes, and other core Crucible configuration parameters.
 out:
   - No direct control over jobs on a host.
