@@ -1,0 +1,77 @@
+{
+  "decision_trace_format_version": "0.1",
+  "trace_id": "crucible-app-decomposition",
+  "title": "Crucible.app Product Spec Decomposition",
+  "created_at": "2026-07-15T22:42:50-04:00",
+  "updated_at": "2026-07-15T22:42:50-04:00",
+  "subject": {
+    "type": "other",
+    "id": "crucible-app-product-spec-portfolio",
+    "title": "Crucible.app Product Spec Portfolio"
+  },
+  "events": [
+    {
+      "event_id": "split-broad-product-spec",
+      "event_type": "intent_decision",
+      "occurred_at": "2026-07-15T22:42:50-04:00",
+      "summary": "Replace the single broad Crucible.app draft with separate contracts for live fleet observability, operational history, and safe configuration.",
+      "source": {
+        "product_spec_revision": 1,
+        "links": [
+          {
+            "type": "product_spec",
+            "url": "https://github.com/ericlitman/crucible-mac/blob/25e649ec137798bc7ff23c4b4a7495769c9013ac/docs/product-specs/product-spec.product-spec.md",
+            "title": "Original Crucible.app Product Spec revision 1"
+          },
+          {
+            "type": "linear_issue",
+            "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-1/product-specification",
+            "title": "CRUMAC-1 Product Specification"
+          }
+        ]
+      },
+      "decision": {
+        "outcome": "update_spec",
+        "rationale": "The original draft combined three independently valuable product bets with different evidence, dependencies, and delivery risks. Separate contracts make scope drift visible, keep acceptance criteria coherent, and allow Linear handoffs to cite one pinned intent revision.",
+        "approved_by": [
+          "Eric Litman"
+        ]
+      },
+      "result": {
+        "linked_artifacts": [
+          {
+            "type": "product_spec",
+            "url": "../product-specs/live-fleet-observability.product-spec.md",
+            "title": "Crucible.app Live Fleet Observability"
+          },
+          {
+            "type": "product_spec",
+            "url": "../product-specs/operational-history.product-spec.md",
+            "title": "Crucible.app Operational History and Trends"
+          },
+          {
+            "type": "product_spec",
+            "url": "../product-specs/safe-configuration.product-spec.md",
+            "title": "Crucible.app Safe Fleet Configuration"
+          },
+          {
+            "type": "linear_issue",
+            "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-2/build-live-fleet-observability-and-alerts",
+            "title": "CRUMAC-2 Live Fleet Observability"
+          },
+          {
+            "type": "linear_issue",
+            "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-3/add-operational-history-and-trend-reporting",
+            "title": "CRUMAC-3 Operational History"
+          },
+          {
+            "type": "linear_issue",
+            "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-4/add-safe-fleet-configuration-and-deployment",
+            "title": "CRUMAC-4 Safe Configuration"
+          }
+        ],
+        "learning": "ProductSpec is most useful here when one file represents one product bet and cross-spec dependencies carry sequencing instead of one issue duplicating an entire portfolio."
+      }
+    }
+  ]
+}
