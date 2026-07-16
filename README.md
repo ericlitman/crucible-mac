@@ -60,6 +60,9 @@ open -n .build/DerivedData/Build/Products/Debug/Crucible.app \
 
 Both surfaces support `light` or `dark`. The proof launcher, arguments, and
 fixture payload are DEBUG-only and absent from Release builds.
+Append `--preview-stale`, `--preview-incompatible`, or `--preview-error` to a
+dashboard proof launch to capture the corresponding retained-state or error
+presentation without changing the installed CLI.
 
 Release builds exclude the preview payload and never fall back to fake data.
 The five CRUMAC-5 contract fixtures remain test-target-only. Fleet I/O remains

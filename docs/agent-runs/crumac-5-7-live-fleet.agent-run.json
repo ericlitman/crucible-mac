@@ -102,7 +102,7 @@
           "title": "Last-known-state retention and error presentation"
         }
       ],
-      "notes": "Fixtures and reducer tests prove unavailable, incompatible, stale, and incomplete results retain the last successful snapshot, label it non-live, preserve last-success time, and surface useful typed errors without substituting preview data."
+      "notes": "Fixtures and reducer tests prove unavailable, incompatible, stale, and incomplete results retain the last successful snapshot, label it non-live, preserve last-success time, and surface useful typed errors without substituting preview data. A DEBUG-only incompatible proof state preserves the fleet and source timestamp while remaining distinct from stale and launch-failed presentations; it is excluded from Release builds."
     },
     {
       "item_id": "AC-8",
@@ -141,7 +141,7 @@
           "title": "Strict parser, refresh, state, process, and view-model tests"
         }
       ],
-      "notes": "Five byte-identical CLI response fixtures cover healthy, stale, incomplete, incompatible, and failed states. Fifty AppKit-free app tests cover strict parsing, duplicate keys, process lifecycle, refresh cadence, state retention, selection, and view models; strict Release build and packaged-app smoke verification pass. Alert deduplication is not implemented, so the criterion is intentionally not claimed."
+      "notes": "Five byte-identical CLI response fixtures cover healthy, stale, incomplete, incompatible, and failed states. Fifty-one AppKit-free app tests cover strict parsing, duplicate keys, process lifecycle, refresh cadence, state retention, selection, proof-state isolation, and view models; strict Release build and packaged-app smoke verification pass. Alert deduplication is not implemented, so the criterion is intentionally not claimed."
     },
     {
       "item_id": "SM-1",

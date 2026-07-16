@@ -202,5 +202,13 @@ enum PreviewFixtures {
         errorMessage: "Previewing a CLI launch failure while preserving the last known snapshot.",
         isPreviewData: true
     )
+
+    static let incompatiblePresentation = FleetPresentation(
+        snapshot: fleet,
+        freshness: .incompatible,
+        lastSuccessfulRefresh: sourceTimestamp,
+        errorMessage: "unsupported live-fleet contract version: 2",
+        isPreviewData: true
+    )
 }
 #endif

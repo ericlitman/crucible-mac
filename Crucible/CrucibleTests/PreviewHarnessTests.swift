@@ -21,6 +21,14 @@ struct PreviewHarnessTests {
             arguments: ["Crucible", PreviewHarness.previewArgument],
             fixturesIncluded: false
         ))
+        #expect(!PreviewHarness.shouldLoadPreviewData(
+            arguments: [
+                "Crucible",
+                PreviewHarness.previewArgument,
+                PreviewHarness.incompatibleArgument,
+            ],
+            fixturesIncluded: false
+        ))
     }
 
     @Test("DEBUG launch harness labels fixture data")
@@ -32,6 +40,26 @@ struct PreviewHarnessTests {
         #expect(presentation.isPreviewData)
         #expect(presentation.snapshot == PreviewFixtures.fleet)
         #expect(presentation.freshness == .preview(asOf: PreviewFixtures.sourceTimestamp))
+    }
+
+    @Test("DEBUG incompatible proof selects a distinct truthful CLI response presentation")
+    func incompatiblePresentation() {
+        let presentation = PreviewHarness.initialPresentation(
+            arguments: [
+                "Crucible",
+                PreviewHarness.previewArgument,
+                PreviewHarness.incompatibleArgument,
+            ]
+        )
+
+        #expect(presentation == PreviewFixtures.incompatiblePresentation)
+        #expect(presentation.snapshot == PreviewFixtures.fleet)
+        #expect(presentation.freshness == .incompatible)
+        #expect(presentation.lastSuccessfulRefresh == PreviewFixtures.sourceTimestamp)
+        #expect(presentation.errorMessage == "unsupported live-fleet contract version: 2")
+        #expect(presentation.isPreviewData)
+        #expect(presentation != PreviewFixtures.stalePresentation)
+        #expect(presentation != PreviewFixtures.failedPresentation)
     }
 
     @Test("Proof surface parsing accepts only named DEBUG surfaces")
