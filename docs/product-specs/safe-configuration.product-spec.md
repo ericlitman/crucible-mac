@@ -5,7 +5,7 @@ artifact_type: "prd"
 spec_revision: 1
 author: "Eric Litman"
 created_at: "2026-07-15T22:42:50-04:00"
-updated_at: "2026-07-15T22:42:50-04:00"
+updated_at: "2026-07-15T23:20:26-04:00"
 linked_github_repo: "ericlitman/crucible-mac"
 applies_to:
   - component: "Crucible.app"
@@ -91,7 +91,7 @@ The configuration surface should optimize for understanding before editing: effe
   section_id: acceptance_criteria
 - type: product_spec
   product_spec_path: "docs/product-specs/live-fleet-observability.product-spec.md"
-  product_spec_revision: 1
+  product_spec_revision: 2
   relation: depends_on
   title: "Crucible.app Live Fleet Observability"
 - type: code
