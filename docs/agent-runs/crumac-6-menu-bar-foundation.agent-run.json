@@ -1,0 +1,117 @@
+{
+  "agent_run_format_version": "0.1",
+  "run_id": "crumac-6-menu-bar-foundation",
+  "agent": {
+    "name": "Codex",
+    "version": "GPT-5.6 Sol Extra High"
+  },
+  "product_spec": {
+    "path": "docs/product-specs/live-fleet-observability.product-spec.md",
+    "spec_revision": 2,
+    "content_hash": "sha256:b818b22aa9c5057987b4664bc6b4393a2515d1028647bcecc24af8f372bda33b"
+  },
+  "started_at": "2026-07-16T11:08:32.592Z",
+  "completed_at": "2026-07-16T12:02:08Z",
+  "status": "completed",
+  "checked_items": [
+    {
+      "item_id": "AC-1",
+      "status": "not_checked",
+      "notes": "No live refresh or production CLI adapter is implemented in this delivery slice. The app has no direct-host or network implementation."
+    },
+    {
+      "item_id": "AC-2",
+      "status": "not_checked",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/6",
+          "title": "Native menu-bar fleet overview foundation"
+        }
+      ],
+      "notes": "The fixture-backed menu surface models all named states, hosts, and queue rows, but live-fleet completeness is not yet implemented or verified."
+    },
+    {
+      "item_id": "AC-3",
+      "status": "not_checked",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/6",
+          "title": "Progressive fixture-backed host, job, and lane detail"
+        }
+      ],
+      "notes": "The model and view hierarchy cover the required detail fields against fixtures, but the live CLI source and full retry or recoverable-failure history remain follow-up work."
+    },
+    {
+      "item_id": "AC-4",
+      "status": "not_checked",
+      "notes": "Polling and the prerequisite CLI load test are intentionally deferred."
+    },
+    {
+      "item_id": "AC-5",
+      "status": "not_checked",
+      "notes": "Alert evaluation and macOS notifications are intentionally deferred."
+    },
+    {
+      "item_id": "AC-6",
+      "status": "not_checked",
+      "notes": "Notification modes and deduplication are intentionally deferred."
+    },
+    {
+      "item_id": "AC-7",
+      "status": "not_checked",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/6",
+          "title": "Freshness and last-known-state model foundation"
+        }
+      ],
+      "notes": "Stale, incompatible, unavailable, and retained-last-state presentations are modeled and unit tested, but live CLI failures are not yet exercised."
+    },
+    {
+      "item_id": "AC-8",
+      "status": "passed",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/6",
+          "title": "App and template menu-bar icon assets"
+        },
+        {
+          "type": "linear_issue",
+          "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-6/bootstrap-the-native-menu-bar-shell-and-fixture-backed-fleet-overview",
+          "title": "Attached light and dark menu-surface proof"
+        }
+      ],
+      "notes": "The approved artwork and transparent template derivatives are integrated. Computer Use captured the exact MenuBarContentView in explicit light and dark SwiftUI appearances, showing the same template asset legibly in each; both screenshots are attached to CRUMAC-6. A packaged runtime screenshot also confirms the white template icon in the live dark macOS menu bar."
+    },
+    {
+      "item_id": "AC-9",
+      "status": "not_checked",
+      "notes": "Distribution signing and Sparkle are intentionally deferred."
+    },
+    {
+      "item_id": "AC-10",
+      "status": "not_checked",
+      "evidence": [
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/6",
+          "title": "Model tests and packaged-app smoke harness"
+        }
+      ],
+      "notes": "Fourteen tests cover overview, freshness, preview isolation, strict DEBUG proof-surface/appearance parsing, and selection without launching AppKit; a packaged-app smoke test verifies launch and clean teardown. A separate Release build excludes all fixture and proof-harness identifiers. Live CLI parsing, refresh policy, and alert deduplication remain unimplemented."
+    },
+    {
+      "item_id": "SM-1",
+      "status": "not_checked",
+      "notes": "Per-PR token burn cannot be measured until the live contract and historical reporting slices are deployed."
+    }
+  ],
+  "drift": {
+    "detected": false
+  },
+  "completion_claim": "This execution completed only the CRUMAC-6 native foundation: a fixture-backed menu-bar and dashboard shell, asset integration, model tests, DEBUG-only visual proof tooling, light/dark screenshot evidence, build/run tooling, and smoke verification. It claims AC-8 only; all live CLI, refresh, alerting, notification, distribution, historical reporting, configuration, and success-metric work remains explicitly not checked."
+}
