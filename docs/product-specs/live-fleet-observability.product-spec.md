@@ -2,10 +2,10 @@
 spec_format_version: "0.1"
 title: "Crucible.app Live Fleet Observability"
 artifact_type: "prd"
-spec_revision: 2
+spec_revision: 3
 author: "Eric Litman"
 created_at: "2026-07-15T22:42:50-04:00"
-updated_at: "2026-07-15T23:20:26-04:00"
+updated_at: "2026-07-16T18:27:00-04:00"
 linked_github_repo: "ericlitman/crucible-mac"
 applies_to:
   - component: "Crucible.app"
@@ -59,7 +59,7 @@ cut:
 - id: AC-6
   criterion: The operator can choose between notifications for all major state changes and notifications for important conditions only, and the app does not repeat a notification for the same unchanged transition or boundary condition.
 - id: AC-7
-  criterion: When the CLI is unavailable, incompatible, or returns stale or incomplete data, the app preserves the last known state, labels it as stale, shows the last successful refresh time, and exposes a useful error without presenting the state as live.
+  criterion: When the CLI returns a fresh partial snapshot at least as recent as the displayed state, the app advances to that snapshot, labels it incomplete and non-live, preserves the last successful complete-refresh time, and exposes the incompleteness reasons; when a response is unavailable, incompatible, stale, or failed, the app preserves the newer known state, labels it non-live, and exposes a useful error; when any snapshot is older than the displayed state, the app ignores it and leaves the entire newer presentation unchanged.
 - id: AC-8
   criterion: The approved app artwork is represented in the application icon asset catalog, and a derived transparent template image remains legible as the menu bar icon in both light and dark appearances.
 - id: AC-9
