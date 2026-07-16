@@ -26,6 +26,21 @@ inspection only, opt into the DEBUG-only, clearly labelled fixture harness:
 CRUCIBLE_PREVIEW_DATA=1 ./script/build_and_run.sh
 ```
 
+### Visual proof windows
+
+DEBUG builds can present the production menu or dashboard view in a standard
+window for screenshot verification, using the same clearly labelled fixtures:
+
+```sh
+open -n .build/DerivedData/Build/Products/Debug/Crucible.app \
+  --args --preview-surface=menu --preview-appearance=light
+open -n .build/DerivedData/Build/Products/Debug/Crucible.app \
+  --args --preview-surface=dashboard --preview-appearance=dark
+```
+
+Both surfaces support `light` or `dark`. The proof launcher, arguments, and
+fixture payload are DEBUG-only and absent from Release builds.
+
 Release builds exclude the fixture payload and never fall back to preview data.
 There is no CLI invocation, refresh loop, direct host connection, networking,
 or production data adapter in this slice. Future fleet I/O remains owned by the

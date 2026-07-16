@@ -11,7 +11,7 @@
     "content_hash": "sha256:b818b22aa9c5057987b4664bc6b4393a2515d1028647bcecc24af8f372bda33b"
   },
   "started_at": "2026-07-16T11:08:32.592Z",
-  "completed_at": "2026-07-16T11:09:20Z",
+  "completed_at": "2026-07-16T12:02:08Z",
   "status": "completed",
   "checked_items": [
     {
@@ -72,15 +72,20 @@
     },
     {
       "item_id": "AC-8",
-      "status": "not_checked",
+      "status": "passed",
       "evidence": [
         {
           "type": "github_pr",
           "url": "https://github.com/ericlitman/crucible-mac/pull/6",
           "title": "App and template menu-bar icon assets"
+        },
+        {
+          "type": "linear_issue",
+          "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-6/bootstrap-the-native-menu-bar-shell-and-fixture-backed-fleet-overview",
+          "title": "Attached light and dark menu-surface proof"
         }
       ],
-      "notes": "The approved artwork and transparent template derivatives are integrated. Light and dark appearance legibility still requires screenshot evidence."
+      "notes": "The approved artwork and transparent template derivatives are integrated. Computer Use captured the exact MenuBarContentView in explicit light and dark SwiftUI appearances, showing the same template asset legibly in each; both screenshots are attached to CRUMAC-6. A packaged runtime screenshot also confirms the white template icon in the live dark macOS menu bar."
     },
     {
       "item_id": "AC-9",
@@ -97,7 +102,7 @@
           "title": "Model tests and packaged-app smoke harness"
         }
       ],
-      "notes": "Twelve tests cover overview, freshness, preview isolation, and selection without launching AppKit; a packaged-app smoke test verifies launch and clean teardown. Parsing, refresh policy, and alert deduplication remain unimplemented."
+      "notes": "Fourteen tests cover overview, freshness, preview isolation, strict DEBUG proof-surface/appearance parsing, and selection without launching AppKit; a packaged-app smoke test verifies launch and clean teardown. A separate Release build excludes all fixture and proof-harness identifiers. Live CLI parsing, refresh policy, and alert deduplication remain unimplemented."
     },
     {
       "item_id": "SM-1",
@@ -108,5 +113,5 @@
   "drift": {
     "detected": false
   },
-  "completion_claim": "This execution completed only the CRUMAC-6 native foundation: a fixture-backed menu-bar and dashboard shell, asset integration, model tests, build/run tooling, and smoke verification. It does not claim any ProductSpec acceptance criterion or success metric is fully complete."
+  "completion_claim": "This execution completed only the CRUMAC-6 native foundation: a fixture-backed menu-bar and dashboard shell, asset integration, model tests, DEBUG-only visual proof tooling, light/dark screenshot evidence, build/run tooling, and smoke verification. It claims AC-8 only; all live CLI, refresh, alerting, notification, distribution, historical reporting, configuration, and success-metric work remains explicitly not checked."
 }

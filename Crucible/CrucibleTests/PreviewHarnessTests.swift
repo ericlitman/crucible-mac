@@ -33,4 +33,20 @@ struct PreviewHarnessTests {
         #expect(presentation.snapshot == PreviewFixtures.fleet)
         #expect(presentation.freshness == .preview(asOf: PreviewFixtures.sourceTimestamp))
     }
+
+    @Test("Proof surface parsing accepts only named DEBUG surfaces")
+    func proofSurfaceParsing() {
+        #expect(PreviewHarness.proofSurface(arguments: ["Crucible", "--preview-surface=menu"]) == .menu)
+        #expect(PreviewHarness.proofSurface(arguments: ["Crucible", "--preview-surface=dashboard"]) == .dashboard)
+        #expect(PreviewHarness.proofSurface(arguments: ["Crucible", "--preview-surface=unknown"]) == nil)
+        #expect(PreviewHarness.proofSurface(arguments: ["Crucible"]) == nil)
+    }
+
+    @Test("Proof appearance parsing accepts only named DEBUG appearances")
+    func proofAppearanceParsing() {
+        #expect(PreviewHarness.proofAppearance(arguments: ["Crucible", "--preview-appearance=light"]) == .light)
+        #expect(PreviewHarness.proofAppearance(arguments: ["Crucible", "--preview-appearance=dark"]) == .dark)
+        #expect(PreviewHarness.proofAppearance(arguments: ["Crucible", "--preview-appearance=system"]) == nil)
+        #expect(PreviewHarness.proofAppearance(arguments: ["Crucible"]) == nil)
+    }
 }

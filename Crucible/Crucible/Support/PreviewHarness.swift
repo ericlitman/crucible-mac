@@ -13,6 +13,34 @@ enum PreviewHarness {
     static let staleArgument = "--preview-stale"
     static let errorArgument = "--preview-error"
 
+    #if DEBUG
+    enum ProofSurface: String, Equatable {
+        case menu
+        case dashboard
+    }
+
+    enum ProofAppearance: String, Equatable {
+        case light
+        case dark
+    }
+
+    static func proofSurface(arguments: [String] = ProcessInfo.processInfo.arguments) -> ProofSurface? {
+        let prefix = "--preview-surface="
+        guard let argument = arguments.first(where: { $0.hasPrefix(prefix) }) else {
+            return nil
+        }
+        return ProofSurface(rawValue: String(argument.dropFirst(prefix.count)))
+    }
+
+    static func proofAppearance(arguments: [String] = ProcessInfo.processInfo.arguments) -> ProofAppearance? {
+        let prefix = "--preview-appearance="
+        guard let argument = arguments.first(where: { $0.hasPrefix(prefix) }) else {
+            return nil
+        }
+        return ProofAppearance(rawValue: String(argument.dropFirst(prefix.count)))
+    }
+    #endif
+
     static func shouldLoadPreviewData(
         arguments: [String],
         fixturesIncluded: Bool = BuildCapabilities.includesPreviewFixtures
