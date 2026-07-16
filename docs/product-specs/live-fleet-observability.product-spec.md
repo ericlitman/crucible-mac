@@ -2,10 +2,10 @@
 spec_format_version: "0.1"
 title: "Crucible.app Live Fleet Observability"
 artifact_type: "prd"
-spec_revision: 1
+spec_revision: 2
 author: "Eric Litman"
 created_at: "2026-07-15T22:42:50-04:00"
-updated_at: "2026-07-15T22:42:50-04:00"
+updated_at: "2026-07-15T23:20:26-04:00"
 linked_github_repo: "ericlitman/crucible-mac"
 applies_to:
   - component: "Crucible.app"
@@ -32,6 +32,7 @@ in:
   - Add missing fleet intelligence to the Crucible CLI before consuming it in the app.
   - Notify for important operational problems and optionally for all major state changes.
   - Ship a native macOS menu bar experience using the approved Crucible artwork and an update path through Sparkle.
+  - Follow the selective CodexBar alignment decision for native lifecycle, menu bar interaction, state flow, refresh behavior, and testing seams.
 out:
   - Do not connect Crucible.app directly to any host in the fleet.
   - Do not mutate queued or running jobs in this version; future queue actions must be introduced through the CLI.
@@ -39,7 +40,7 @@ out:
   - Do not provide historical reporting beyond the context required to explain the current state.
 cut:
   - Do not support Windows.
-  - Do not rebuild or copy CodexBar; use it only as a directional interaction and design reference.
+  - Do not copy or fork CodexBar, pursue feature parity, or import its provider architecture; transfer only patterns approved by the CodexBar alignment decision.
 ```
 
 ## Acceptance Criteria
@@ -63,6 +64,8 @@ cut:
   criterion: The approved app artwork is represented in the application icon asset catalog, and a derived transparent template image remains legible as the menu bar icon in both light and dark appearances.
 - id: AC-9
   criterion: A signed release of Crucible.app can discover and install an application update through Sparkle.
+- id: AC-10
+  criterion: Given CLI response fixtures for healthy, stale, incompatible, and failed states, automated tests can exercise parsing, refresh policy, state transitions, alert deduplication, and menu or view models without launching AppKit, while a packaged-app smoke test verifies status-item creation and clean teardown.
 ```
 
 ## Success Metrics
@@ -78,10 +81,15 @@ cut:
 
 The default surface should be glanceable from the menu bar, with progressive disclosure rather than a dashboard compressed into a popover. Status must not rely on color alone, and verification evidence for each user-visible acceptance criterion must include light- and dark-appearance screenshots.
 
+## Solution Alternatives
+
+**Decision: selectively adopt CodexBar as a reference implementation, not as a template or dependency.** Adopt its field-tested lessons for native menu bar lifecycle, compact progressive disclosure, one-way snapshot state, refresh coalescing, explicit stale and error states, and model-first testing. Adapt its fetcher boundary into one narrow, injectable Crucible CLI client with exactly one production implementation; fleet configuration and operational intelligence remain owned by the CLI. Begin with first-party SwiftUI menu bar primitives and introduce AppKit only for behavior a focused spike proves they cannot provide. Reject CodexBar's multi-provider abstractions, direct credential and data probes, bundled CLI and helper processes, widgets, feature surface, and mature CI or release machinery unless a current Crucible requirement independently justifies them. The binding rationale and review triggers are recorded in `docs/design/codexbar-alignment.md`.
+
 ## Open Questions
 
 - `RESOLVE-IN-PLAN:` Measure CLI and fleet pressure and select the foreground polling cadence that is faster than five minutes without creating material operational load.
 - `RESOLVE-IN-PLAN:` Bind each required fleet field and state transition to the current Crucible CLI schema, adding missing intelligence to the CLI rather than inventing an app-only source.
+- `RESOLVE-IN-PLAN:` Prove whether first-party SwiftUI menu bar primitives satisfy the required interaction, accessibility, and update behavior before introducing a custom `NSStatusItem` or dynamic AppKit menu.
 
 ## Related Artifacts
 
@@ -100,6 +108,10 @@ The default surface should be glanceable from the menu bar, with progressive dis
   section_id: user_experience
 - type: other
   url: "https://github.com/steipete/CodexBar"
-  title: "CodexBar directional reference"
+  title: "CodexBar upstream reference"
   section_id: user_experience
+- type: code
+  url: "../design/codexbar-alignment.md"
+  title: "CodexBar selective alignment decision"
+  section_id: solution_alternatives
 ```
