@@ -64,6 +64,92 @@ struct LiveFleetContractParserTests {
         #expect(jobDetail.lanes[0].tokenBounds == TokenBounds(soft: 2_000, hard: nil))
     }
 
+    @Test("Job bounds survive mapping and make bounds-only details present metrics")
+    @MainActor
+    func jobBoundsPresentation() throws {
+        let cases: [(String, [String: Any], TimeBounds, TokenBounds)] = [
+            (
+                "time-only",
+                [
+                    "time": ["soft_seconds": 300, "hard_seconds": 600],
+                    "tokens": ["soft": NSNull(), "hard": NSNull()],
+                ],
+                TimeBounds(softSeconds: 300, hardSeconds: 600),
+                TokenBounds(soft: nil, hard: nil)
+            ),
+            (
+                "token-only",
+                [
+                    "time": ["soft_seconds": NSNull(), "hard_seconds": NSNull()],
+                    "tokens": ["soft": 2_000, "hard": 4_000],
+                ],
+                TimeBounds(softSeconds: nil, hardSeconds: nil),
+                TokenBounds(soft: 2_000, hard: 4_000)
+            ),
+        ]
+
+        for (label, bounds, expectedTimeBounds, expectedTokenBounds) in cases {
+            var object = try snapshotWithLane()
+            var jobs = object["jobs"] as! [[String: Any]]
+            jobs[0]["bounds"] = bounds
+            object["jobs"] = jobs
+
+            guard case let .snapshot(contract) = try LiveFleetContractParser.parse(encodedFixture(object)) else {
+                Issue.record("Expected snapshot for \(label)")
+                continue
+            }
+            let snapshot = contract.presentationSnapshot()
+            let job = try #require(snapshot.job(id: "job-1"))
+            let detail = try #require(snapshot.detail(for: .job(jobID: "job-1")))
+
+            #expect(job.timeBounds == expectedTimeBounds, "\(label) job time bounds")
+            #expect(job.tokenBounds == expectedTokenBounds, "\(label) job token bounds")
+            #expect(detail.timeBounds == expectedTimeBounds, "\(label) detail time bounds")
+            #expect(detail.tokenBounds == expectedTokenBounds, "\(label) detail token bounds")
+            #expect(detail.currentStage == nil)
+            #expect(detail.elapsedSeconds == nil)
+            #expect(detail.tokenUse == nil)
+            #expect(detail.hasMetrics, "\(label) bounds should present the metrics grid")
+        }
+    }
+
+    @Test("Retry-only and restart-only history remain independently presentable")
+    @MainActor
+    func independentRecoveryHistory() throws {
+        let cases: [(Int?, Int?, String)] = [
+            (2, nil, "2 retries"),
+            (nil, 1, "1 restart"),
+        ]
+
+        for (retries, restarts, expectedLabel) in cases {
+            var object = try snapshotWithLane()
+            var jobs = object["jobs"] as! [[String: Any]]
+            var jobAttempts = jobs[0]["attempts"] as! [String: Any]
+            jobAttempts["retries"] = retries.map { $0 as Any } ?? NSNull()
+            jobAttempts["restarts"] = restarts.map { $0 as Any } ?? NSNull()
+            jobs[0]["attempts"] = jobAttempts
+
+            var lanes = jobs[0]["lanes"] as! [[String: Any]]
+            var laneAttempts = lanes[0]["attempts"] as! [String: Any]
+            laneAttempts["retries"] = retries.map { $0 as Any } ?? NSNull()
+            laneAttempts["restarts"] = restarts.map { $0 as Any } ?? NSNull()
+            lanes[0]["attempts"] = laneAttempts
+            jobs[0]["lanes"] = lanes
+            object["jobs"] = jobs
+
+            guard case let .snapshot(contract) = try LiveFleetContractParser.parse(encodedFixture(object)) else {
+                Issue.record("Expected snapshot for \(expectedLabel)")
+                continue
+            }
+            let snapshot = contract.presentationSnapshot()
+            let jobDetail = try #require(snapshot.detail(for: .job(jobID: "job-1")))
+            let lane = try #require(snapshot.job(id: "job-1")?.lanes.first)
+
+            #expect(jobDetail.recoveryHistoryLabel == expectedLabel)
+            #expect(lane.recoveryHistoryLabel == expectedLabel)
+        }
+    }
+
     @Test("Top-level counts and conditions remain authoritative in presentation")
     @MainActor
     func authoritativeFleetIntelligence() throws {

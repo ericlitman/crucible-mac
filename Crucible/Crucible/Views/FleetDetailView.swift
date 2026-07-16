@@ -19,7 +19,7 @@ struct FleetDetailView: View {
                         }
                     }
 
-                    if detail.currentStage != nil || detail.elapsedSeconds != nil || detail.tokenUse != nil {
+                    if detail.hasMetrics {
                         DetailMetricsGrid(detail: detail)
                     }
 
@@ -31,10 +31,10 @@ struct FleetDetailView: View {
                         )
                     }
 
-                    if let retries = detail.retryCount, let restarts = detail.restartCount {
+                    if let recoveryHistory = detail.recoveryHistoryLabel {
                         DetailLine(
                             title: "Recovery history",
-                            value: "\(retries) retries · \(restarts) restarts",
+                            value: recoveryHistory,
                             systemImage: "arrow.counterclockwise"
                         )
                     }

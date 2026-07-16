@@ -52,8 +52,8 @@ struct LaneDetailCard: View {
                 .foregroundStyle(.secondary)
             }
 
-            if let retries = lane.retryCount, let restarts = lane.restartCount {
-                Label("\(retries) retries · \(restarts) restarts", systemImage: "arrow.counterclockwise")
+            if let recoveryHistory = lane.recoveryHistoryLabel {
+                Label(recoveryHistory, systemImage: "arrow.counterclockwise")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

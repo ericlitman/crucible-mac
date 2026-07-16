@@ -24,6 +24,39 @@ struct FleetSelectionDetail: Equatable, Sendable {
     let sourceTimestamp: Date
 }
 
+protocol FleetRecoveryCountProviding {
+    var retryCount: Int? { get }
+    var restartCount: Int? { get }
+}
+
+extension FleetRecoveryCountProviding {
+    var recoveryHistoryLabel: String? {
+        let parts = [
+            retryCount.map { countLabel($0, singular: "retry", plural: "retries") },
+            restartCount.map { countLabel($0, singular: "restart", plural: "restarts") },
+        ].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func countLabel(_ count: Int, singular: String, plural: String) -> String {
+        "\(count) \(count == 1 ? singular : plural)"
+    }
+}
+
+extension FleetSelectionDetail: FleetRecoveryCountProviding {
+    var hasMetrics: Bool {
+        currentStage != nil
+            || elapsedSeconds != nil
+            || tokenUse != nil
+            || timeBounds?.softSeconds != nil
+            || timeBounds?.hardSeconds != nil
+            || tokenBounds?.soft != nil
+            || tokenBounds?.hard != nil
+    }
+}
+
+extension LaneSnapshot: FleetRecoveryCountProviding {}
+
 extension FleetSnapshot {
     func detail(for selection: FleetSelection?) -> FleetSelectionDetail? {
         guard let selection else { return nil }
@@ -62,8 +95,8 @@ extension FleetSnapshot {
                 restartCount: job.restartCount,
                 recoverableFailures: job.recoverableFailures,
                 tokenUse: job.tokenUse,
-                tokenBounds: nil,
-                timeBounds: nil,
+                tokenBounds: job.tokenBounds,
+                timeBounds: job.timeBounds,
                 lanes: job.lanes,
                 conditions: conditions.filter { $0.jobID == jobID },
                 sourceTimestamp: sourceTimestamp

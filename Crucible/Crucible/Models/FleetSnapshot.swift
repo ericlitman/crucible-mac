@@ -83,6 +83,8 @@ struct JobSnapshot: Hashable, Identifiable, Sendable {
     let restartCount: Int?
     let recoverableFailures: [String]
     let tokenUse: Double?
+    let tokenBounds: TokenBounds
+    let timeBounds: TimeBounds
     let lanes: [LaneSnapshot]
 }
 

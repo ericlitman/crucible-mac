@@ -159,6 +159,11 @@ nonisolated struct LiveFleetErrorEnvelopeV1: Codable, Equatable, Sendable {
             restartCount: attempts.restarts,
             recoverableFailures: failures.filter { $0.recoverable == true }.map(\.type),
             tokenUse: nil,
+            tokenBounds: TokenBounds(soft: bounds.tokens.soft, hard: bounds.tokens.hard),
+            timeBounds: TimeBounds(
+                softSeconds: bounds.time.softSeconds,
+                hardSeconds: bounds.time.hardSeconds
+            ),
             lanes: lanes.map(\.presentationSnapshot)
         )
     }

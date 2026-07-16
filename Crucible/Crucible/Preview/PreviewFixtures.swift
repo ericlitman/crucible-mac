@@ -35,6 +35,8 @@ enum PreviewFixtures {
                         restartCount: 0,
                         recoverableFailures: ["SwiftPM cache miss recovered"],
                         tokenUse: 48_320,
+                        tokenBounds: TokenBounds(soft: nil, hard: nil),
+                        timeBounds: TimeBounds(softSeconds: nil, hardSeconds: nil),
                         lanes: [
                             LaneSnapshot(
                                 id: "implement",
@@ -95,6 +97,8 @@ enum PreviewFixtures {
                         restartCount: 1,
                         recoverableFailures: ["Registry timeout recovered", "Lock contention recovered"],
                         tokenUse: 92_110,
+                        tokenBounds: TokenBounds(soft: nil, hard: nil),
+                        timeBounds: TimeBounds(softSeconds: nil, hardSeconds: nil),
                         lanes: [
                             LaneSnapshot(
                                 id: "investigate",
@@ -133,6 +137,8 @@ enum PreviewFixtures {
                         restartCount: 2,
                         recoverableFailures: ["Agent resumed after transport failure"],
                         tokenUse: 144_810,
+                        tokenBounds: TokenBounds(soft: nil, hard: nil),
+                        timeBounds: TimeBounds(softSeconds: nil, hardSeconds: nil),
                         lanes: [
                             LaneSnapshot(
                                 id: "test",
@@ -166,6 +172,8 @@ enum PreviewFixtures {
                 restartCount: 0,
                 recoverableFailures: [],
                 tokenUse: nil,
+                tokenBounds: TokenBounds(soft: nil, hard: nil),
+                timeBounds: TimeBounds(softSeconds: nil, hardSeconds: nil),
                 lanes: []
             ),
         ]
