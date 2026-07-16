@@ -7,11 +7,11 @@
   },
   "product_spec": {
     "path": "docs/product-specs/live-fleet-observability.product-spec.md",
-    "spec_revision": 2,
-    "content_hash": "sha256:b818b22aa9c5057987b4664bc6b4393a2515d1028647bcecc24af8f372bda33b"
+    "spec_revision": 3,
+    "content_hash": "sha256:61ae2c71791617657ceb80d8f3587760c39b9adeb37d8408a21714ffc179704b"
   },
   "started_at": "2026-07-16T16:14:30.156Z",
-  "completed_at": "2026-07-16T16:15:07Z",
+  "completed_at": "2026-07-16T22:27:00Z",
   "status": "completed",
   "checked_items": [
     {
@@ -100,9 +100,19 @@
           "type": "github_pr",
           "url": "https://github.com/ericlitman/crucible-mac/pull/7",
           "title": "Last-known-state retention and error presentation"
+        },
+        {
+          "type": "github_pr",
+          "url": "https://github.com/ericlitman/crucible-mac/pull/8",
+          "title": "Ordered fresh-partial snapshot advancement"
+        },
+        {
+          "type": "other",
+          "url": "../decision-traces/live-fleet-observability.decision-trace.json",
+          "title": "Fresh partial snapshot ordering decision"
         }
       ],
-      "notes": "Fixtures and reducer tests prove unavailable, incompatible, stale, and incomplete results retain the last successful snapshot, label it non-live, preserve last-success time, and surface useful typed errors without substituting preview data. A DEBUG-only incompatible proof state preserves the fleet and source timestamp while remaining distinct from stale and launch-failed presentations; it is excluded from Release builds."
+      "notes": "Runtime proof exposed that preserving every incomplete response froze the first partial snapshot indefinitely. Revision 3 and PR #8 now prove that an equal or newer fresh-partial snapshot advances the view while remaining non-live and explaining incompleteness, whereas any older snapshot is ignored and a stale response, error envelope, launch failure, or incompatible response cannot replace newer known state. A DEBUG-only incompatible proof state remains distinct from stale and launch-failed presentations and is excluded from Release builds."
     },
     {
       "item_id": "AC-8",
@@ -141,7 +151,7 @@
           "title": "Strict parser, refresh, state, process, and view-model tests"
         }
       ],
-      "notes": "Five byte-identical CLI response fixtures cover healthy, stale, incomplete, incompatible, and failed states. Fifty-one AppKit-free app tests cover strict parsing, duplicate keys, process lifecycle, refresh cadence, state retention, selection, proof-state isolation, and view models; strict Release build and packaged-app smoke verification pass. Alert deduplication is not implemented, so the criterion is intentionally not claimed."
+      "notes": "Five byte-identical CLI response fixtures cover healthy, stale, incomplete, incompatible, and failed states. Fifty-five AppKit-free app tests cover strict parsing, duplicate keys, process lifecycle, refresh cadence, complete and partial snapshot ordering, state retention, selection, proof-state isolation, and view models; strict Release build and packaged-app smoke verification pass. Alert deduplication is not implemented, so the criterion is intentionally not claimed."
     },
     {
       "item_id": "SM-1",
@@ -152,5 +162,5 @@
   "drift": {
     "detected": false
   },
-  "completion_claim": "This execution completes only the CRUMAC-5 and CRUMAC-7 live-observability slice: a deployed versioned read-only CLI contract, a strict CLI-only macOS consumer, truthful current fleet and queue detail, 60-second foreground and 300-second background refresh, explicit freshness and last-known-state behavior, automated validation, and runtime proof. It claims AC-1, AC-2, AC-3, AC-4, and AC-7; AC-8 remains passed from CRUMAC-6. Notifications, notification deduplication, live token telemetry, queue management, historical reporting, configuration, signing and updates, and the post-launch success metric remain explicitly not checked."
+  "completion_claim": "This execution completes only the CRUMAC-5 and CRUMAC-7 live-observability slice: a deployed versioned read-only CLI contract, a strict CLI-only macOS consumer, truthful current fleet and queue detail, 60-second foreground and 300-second background refresh, ordered fresh-partial advancement with explicit incomplete state, stale and failure retention, automated validation, and merged-main runtime proof. It claims AC-1, AC-2, AC-3, AC-4, and AC-7; AC-8 remains passed from CRUMAC-6. Notifications, notification deduplication, live token telemetry, queue management, historical reporting, configuration, signing and updates, and the post-launch success metric remain explicitly not checked."
 }

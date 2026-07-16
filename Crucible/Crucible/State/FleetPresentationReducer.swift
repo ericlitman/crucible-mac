@@ -38,6 +38,11 @@ struct FleetPresentationReducer {
         current: FleetPresentation
     ) -> FleetPresentation {
         let incoming = contract.presentationSnapshot()
+        let prior = current.snapshot ?? lastCompleteSnapshot
+
+        if let prior, prior.sourceTimestamp > incoming.sourceTimestamp {
+            return current
+        }
 
         if contract.freshness.state == .fresh, contract.completeness.state == .complete {
             lastCompleteSnapshot = incoming
@@ -61,13 +66,11 @@ struct FleetPresentationReducer {
             )
         }
 
-        let prior = current.snapshot ?? lastCompleteSnapshot
-        let retained = prior ?? incoming
         return FleetPresentation(
-            snapshot: retained,
-            freshness: .stale(asOf: retained.sourceTimestamp),
+            snapshot: incoming,
+            freshness: .stale(asOf: incoming.sourceTimestamp),
             lastSuccessfulRefresh: current.lastSuccessfulRefresh,
-            errorMessage: incompleteMessage(contract.completeness.reasons, retainedPrior: prior != nil),
+            errorMessage: incompleteMessage(contract.completeness.reasons),
             isPreviewData: false
         )
     }
@@ -102,11 +105,8 @@ struct FleetPresentationReducer {
         return "CLI data is stale by \(age) (\(reasons))."
     }
 
-    private func incompleteMessage(_ reasons: [String], retainedPrior: Bool) -> String {
+    private func incompleteMessage(_ reasons: [String]) -> String {
         let detail = reasons.isEmpty ? "the CLI reported partial coverage" : reasons.joined(separator: ", ")
-        let action = retainedPrior
-            ? "preserving the last known snapshot"
-            : "showing the available partial snapshot"
-        return "CLI refresh is incomplete; \(action) (\(detail))."
+        return "CLI refresh is incomplete; showing the newest available partial snapshot (\(detail))."
     }
 }
