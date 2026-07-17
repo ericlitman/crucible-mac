@@ -40,6 +40,10 @@ final class FleetNotificationCoordinator {
         }
 
         let authorizationState = await client.authorizationState()
+        AppTelemetry.evaluatedNotifications(
+            authorization: authorizationState.title,
+            candidates: alerts.count
+        )
         guard authorizationState == .authorized else {
             return FleetNotificationResult(
                 authorizationState: authorizationState,
@@ -63,6 +67,11 @@ final class FleetNotificationCoordinator {
             }
             inFlightEpisodeIDs.remove(alert.episodeID)
         }
+
+        AppTelemetry.completedNotificationDelivery(
+            delivered: deliveredEpisodeIDs.count,
+            errors: deliveryErrors.count
+        )
 
         return FleetNotificationResult(
             authorizationState: authorizationState,
