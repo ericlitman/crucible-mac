@@ -5,7 +5,7 @@ artifact_type: "prd"
 spec_revision: 5
 author: "Eric Litman"
 created_at: "2026-07-15T22:42:50-04:00"
-updated_at: "2026-07-17T00:03:18-04:00"
+updated_at: "2026-07-17T00:19:13-04:00"
 linked_github_repo: "ericlitman/crucible-mac"
 applies_to:
   - component: "Crucible.app"
@@ -50,13 +50,13 @@ cut:
 - id: AC-1
   criterion: Given any live fleet refresh, Crucible.app obtains fleet data only by invoking a versioned, machine-readable Crucible CLI contract and initiates no direct connection to a fleet host.
 - id: AC-2
-  criterion: When the operator opens the actual macOS status-item panel, without first opening the dashboard it shows fleet health and source freshness, every known host, and every item in the current canonical queue in usable scrollable content, with clear counts and textual status for active, waiting, completed, failed, blocked, and stalled work.
+  criterion: When the operator opens the actual macOS status-item panel, without first opening the dashboard it shows fleet health and source freshness in usable scrollable content with clear counts and textual status for active, waiting, completed, failed, blocked, and stalled work; for an authoritative complete snapshot it shows every known host and every item in the current canonical queue, while for an incomplete snapshot it shows every supplied host and queue item plus the missing coverage, truncation, and retained-selection treatment required by AC-7 and never presents that inventory as complete.
 - id: AC-3
   criterion: When the operator selects a host, job, or lane, the app shows every available CLI-supplied lifecycle and raw state, current stage, held-capacity reason and queue position, assigned or preferred host, elapsed time, last meaningful progress, attempt, retry, restart, recovery, and recoverable-failure timeline with reasons and timestamps, token use or an explicit unavailable state with observation time and provenance, applicable time and token bounds, host pressure or resource constraints, configured, reported, and effective capacity, active and queued counts, and the entity and response source timestamps.
 - id: AC-4
   criterion: While automatic polling is enabled and the app is in the background, it schedules refresh at a five-minute cadence subject to macOS scheduling and never polls more frequently, while the selected foreground cadence is measurably faster and is justified by a documented CLI load test before release.
 - id: AC-5
-  criterion: On the first successful refresh that observes a task with no meaningful progress for at least ten minutes, a lane beyond its time bound, or a lane beyond a soft or hard token bound, the app sends an actionable macOS notification identifying the affected host, job, lane, and condition.
+  criterion: On the first successful refresh that observes a task with no meaningful progress for at least ten minutes, a lane beyond its time bound, or a lane beyond a soft or hard token bound, the app makes an actionable macOS notification identifying the affected host, job, lane, and condition immediately eligible for delivery; subject to the explicit permission and successful-scheduling requirements in AC-11, it delivers that still-active condition once at the earliest permitted opportunity.
 - id: AC-6
   criterion: The operator can choose between notifications for important conditions only and notifications for all major state changes; all-major mode consumes an ordered, replayable Crucible CLI event feed with stable identities and importance classification that covers host availability or pressure changes and job or lane admission, start, pipeline-stage boundary, retry, restart, recovery, completion, failure, block, and stall transitions occurring between refreshes, while the app persists successful delivery identities and never reconstructs transitions by comparing snapshots or repeats an unchanged event or boundary-condition episode.
 - id: AC-7
