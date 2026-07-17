@@ -368,6 +368,78 @@ struct FleetNotificationTests {
         #expect(!store.contains("resolved-during-retry"))
     }
 
+    @Test("An authorized older evaluation cannot alert after a newer snapshot resolves its condition")
+    func authorizedEvaluationUsesLatestResolvedSnapshot() async throws {
+        let client = FakeSystemNotificationClient(
+            authorizationState: .authorized,
+            authorizationResponses: [
+                StubAuthorizationResponse(state: .authorized, delay: .milliseconds(200)),
+                StubAuthorizationResponse(state: .authorized),
+                StubAuthorizationResponse(state: .authorized),
+            ]
+        )
+        let store = MemoryNotificationEpisodeStore()
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(client: client, episodeStore: store)
+        )
+
+        state.apply(try delivery(.healthy, conditions: [condition(id: "resolved-while-authorized")]))
+        await waitUntil { client.authorizationStateRequestCount == 1 }
+        let settingsRetry = Task { await state.notificationSettingsDidBecomeActive() }
+
+        try await Task.sleep(for: .milliseconds(50))
+        state.apply(try delivery(
+            .healthy,
+            conditions: [],
+            generatedAt: "2026-07-16T12:01:05.000Z",
+            sourceObservedAt: "2026-07-16T12:01:00.000Z"
+        ))
+
+        await settingsRetry.value
+        await state.waitForNotificationEvaluation()
+
+        #expect(client.deliveredAlerts.isEmpty)
+        #expect(!store.contains("resolved-while-authorized"))
+    }
+
+    @Test("Permission recovery cannot deliver a condition resolved during its delivery evaluation")
+    func permissionRecoveryEvaluationUsesLatestSnapshot() async throws {
+        let client = FakeSystemNotificationClient(
+            authorizationState: .authorized,
+            authorizationResponses: [
+                StubAuthorizationResponse(state: .notDetermined),
+                StubAuthorizationResponse(state: .authorized),
+                StubAuthorizationResponse(state: .authorized, delay: .milliseconds(200)),
+                StubAuthorizationResponse(state: .authorized),
+            ]
+        )
+        let store = MemoryNotificationEpisodeStore()
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(client: client, episodeStore: store)
+        )
+
+        state.apply(try delivery(.healthy, conditions: [condition(id: "resolved-during-recovery")]))
+        await state.waitForNotificationEvaluation()
+        #expect(client.deliveredAlerts.isEmpty)
+
+        let settingsRetry = Task { await state.notificationSettingsDidBecomeActive() }
+        await waitUntil { client.authorizationStateRequestCount == 3 }
+        state.apply(try delivery(
+            .healthy,
+            conditions: [],
+            generatedAt: "2026-07-16T12:01:05.000Z",
+            sourceObservedAt: "2026-07-16T12:01:00.000Z"
+        ))
+
+        await settingsRetry.value
+        await state.waitForNotificationEvaluation()
+
+        #expect(client.deliveredAlerts.isEmpty)
+        #expect(!store.contains("resolved-during-recovery"))
+    }
+
     @Test("Overlapping authorization refreshes cannot let an older response win")
     func authorizationRefreshesRemainOrdered() async {
         let client = FakeSystemNotificationClient(
@@ -558,6 +630,33 @@ struct FleetNotificationTests {
         #expect(!store.contains("episode-0"))
         #expect(store.contains("episode-299"))
         #expect(defaults.stringArray(forKey: key)?.count == 20)
+    }
+
+    @Test("Persisted delivery identities are capped by recency and retain deterministic deduplication order")
+    func persistenceIsBoundedByRecency() {
+        let suiteName = "CrucibleTests.Notifications.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let key = "episodes"
+        defaults.set(
+            ["legacy-0", "legacy-1", "legacy-2", "legacy-1", "legacy-3"],
+            forKey: key
+        )
+
+        let store = UserDefaultsNotificationEpisodeStore(defaults: defaults, key: key, capacity: 3)
+        #expect(defaults.stringArray(forKey: key) == ["legacy-2", "legacy-1", "legacy-3"])
+
+        store.record("new")
+        #expect(defaults.stringArray(forKey: key) == ["legacy-1", "legacy-3", "new"])
+        #expect(!store.contains("legacy-2"))
+
+        store.record("legacy-1")
+        #expect(defaults.stringArray(forKey: key) == ["legacy-3", "new", "legacy-1"])
+
+        store.reconcile(authoritativeActiveEpisodeIDs: ["new", "legacy-1"])
+        #expect(defaults.stringArray(forKey: key) == ["new", "legacy-1"])
+        #expect(store.contains("new"))
+        #expect(store.contains("legacy-1"))
     }
 
     private func notificationHarness(

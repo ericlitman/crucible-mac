@@ -22,6 +22,7 @@ final class AppState {
     private var pollingStarted = false
     private var lastAcceptedFreshSnapshotForNotifications: FleetSnapshot?
     private var lastAcceptedFreshSnapshotIsAuthoritativeComplete = false
+    private var notificationSnapshotRevision: UInt64 = 0
     private var currentSnapshotIsPartial = false
     private var activeNotificationTargetRoute: FleetAlertRoute?
 
@@ -167,9 +168,11 @@ final class AppState {
             lastAcceptedFreshSnapshotForNotifications = snapshot
             let isAuthoritativeComplete = reduction.acceptedFreshSnapshotIsPartial == false
             lastAcceptedFreshSnapshotIsAuthoritativeComplete = isAuthoritativeComplete
+            notificationSnapshotRevision &+= 1
             scheduleNotifications(
                 for: snapshot,
-                isAuthoritativeComplete: isAuthoritativeComplete
+                isAuthoritativeComplete: isAuthoritativeComplete,
+                revision: notificationSnapshotRevision
             )
         }
     }
@@ -232,13 +235,18 @@ final class AppState {
 
     private func scheduleNotifications(
         for snapshot: FleetSnapshot,
-        isAuthoritativeComplete: Bool
+        isAuthoritativeComplete: Bool,
+        revision: UInt64
     ) {
         _ = enqueueNotificationOperation { state, coordinator in
-            state.applyNotificationResult(await coordinator.process(
+            guard state.notificationSnapshotRevision == revision else { return }
+            let result = await coordinator.process(
                 snapshot,
-                isAuthoritativeComplete: isAuthoritativeComplete
-            ))
+                isAuthoritativeComplete: isAuthoritativeComplete,
+                shouldContinue: { state.notificationSnapshotRevision == revision }
+            )
+            guard state.notificationSnapshotRevision == revision else { return }
+            state.applyNotificationResult(result)
         }
     }
 
@@ -267,10 +275,14 @@ final class AppState {
     ) async {
         guard notificationAuthorizationState == .authorized,
               let snapshot = lastAcceptedFreshSnapshotForNotifications else { return }
-        applyNotificationResult(await notificationCoordinator.process(
+        let revision = notificationSnapshotRevision
+        let result = await notificationCoordinator.process(
             snapshot,
-            isAuthoritativeComplete: lastAcceptedFreshSnapshotIsAuthoritativeComplete
-        ))
+            isAuthoritativeComplete: lastAcceptedFreshSnapshotIsAuthoritativeComplete,
+            shouldContinue: { self.notificationSnapshotRevision == revision }
+        )
+        guard notificationSnapshotRevision == revision else { return }
+        applyNotificationResult(result)
     }
 
     private func applyNotificationResult(_ result: FleetNotificationResult) {

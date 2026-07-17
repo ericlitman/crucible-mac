@@ -30,7 +30,8 @@ final class FleetNotificationCoordinator {
 
     func process(
         _ snapshot: FleetSnapshot,
-        isAuthoritativeComplete: Bool
+        isAuthoritativeComplete: Bool,
+        shouldContinue: @MainActor @Sendable () -> Bool = { true }
     ) async -> FleetNotificationResult {
         let alerts = ImportantConditionAlertPlanner.alerts(for: snapshot)
         if isAuthoritativeComplete {
@@ -44,7 +45,7 @@ final class FleetNotificationCoordinator {
             authorization: authorizationState.title,
             candidates: alerts.count
         )
-        guard authorizationState == .authorized else {
+        guard authorizationState == .authorized, shouldContinue() else {
             return FleetNotificationResult(
                 authorizationState: authorizationState,
                 deliveredEpisodeIDs: [],
@@ -55,6 +56,7 @@ final class FleetNotificationCoordinator {
         var deliveredEpisodeIDs: [String] = []
         var deliveryErrors: [String] = []
         for alert in alerts {
+            guard shouldContinue() else { break }
             guard !inFlightEpisodeIDs.contains(alert.episodeID),
                   !episodeStore.contains(alert.episodeID) else { continue }
             inFlightEpisodeIDs.insert(alert.episodeID)
@@ -66,6 +68,7 @@ final class FleetNotificationCoordinator {
                 deliveryErrors.append("\(alert.episodeID): \(error.localizedDescription)")
             }
             inFlightEpisodeIDs.remove(alert.episodeID)
+            guard shouldContinue() else { break }
         }
 
         AppTelemetry.completedNotificationDelivery(
