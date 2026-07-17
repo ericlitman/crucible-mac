@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -27,25 +28,28 @@ private struct CrucibleRuntimeApp: App {
     init() {
         let presentation = PreviewHarness.initialPresentation()
         let coordinator = presentation.isPreviewData ? nil : FleetRefreshCoordinator(client: ProcessCrucibleCLIClient())
+        let notificationClient = UserNotificationClient()
         let notificationCoordinator = FleetNotificationCoordinator(
-            client: UserNotificationClient(),
+            client: notificationClient,
             episodeStore: UserDefaultsNotificationEpisodeStore()
         )
-        _state = State(initialValue: AppState(
+        let appState = AppState(
             initialPresentation: presentation,
             refreshCoordinator: coordinator,
             notificationCoordinator: notificationCoordinator,
             automaticallyStarts: coordinator != nil
-        ))
+        )
+        notificationClient.setResponseHandler { [weak appState] route in
+            appState?.handleNotificationResponse(route)
+        }
+        _state = State(initialValue: appState)
     }
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarContentView(state: state)
         } label: {
-            Image("MenuBarIcon")
-                .renderingMode(.template)
-                .accessibilityLabel("Crucible")
+            NotificationRoutingMenuBarLabel(state: state)
         }
         .menuBarExtraStyle(.window)
 
@@ -58,6 +62,22 @@ private struct CrucibleRuntimeApp: App {
         Settings {
             NotificationSettingsView(state: state)
         }
+    }
+}
+
+private struct NotificationRoutingMenuBarLabel: View {
+    let state: AppState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Image("MenuBarIcon")
+            .renderingMode(.template)
+            .accessibilityLabel("Crucible")
+            .onChange(of: state.notificationNavigationRequest?.id) { _, requestID in
+                guard requestID != nil else { return }
+                openWindow(id: "fleet-dashboard")
+                NSApp.activate(ignoringOtherApps: true)
+            }
     }
 }
 

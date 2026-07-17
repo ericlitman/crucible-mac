@@ -10,6 +10,8 @@ final class AppState {
     private(set) var visibleSurfaces: Set<FleetSurface> = []
     private(set) var notificationAuthorizationState: NotificationAuthorizationState = .unknown
     private(set) var notificationErrorMessage: String?
+    private(set) var unresolvedNotificationTarget: UnresolvedNotificationTarget?
+    private(set) var notificationNavigationRequest: NotificationNavigationRequest?
 
     private let refreshCoordinator: FleetRefreshCoordinator?
     private let notificationCoordinator: FleetNotificationCoordinator?
@@ -19,6 +21,8 @@ final class AppState {
     private var notificationTask: Task<Void, Never>?
     private var pollingStarted = false
     private var lastAcceptedFreshSnapshotForNotifications: FleetSnapshot?
+    private var currentSnapshotIsPartial = false
+    private var activeNotificationTargetRoute: FleetAlertRoute?
 
     init(
         initialPresentation: FleetPresentation,
@@ -45,6 +49,7 @@ final class AppState {
     var snapshot: FleetSnapshot? { presentation.snapshot }
 
     var selectedHostID: String? {
+        if unresolvedNotificationTarget != nil { return nil }
         guard let selection else { return snapshot?.hosts.first?.id }
         switch selection {
         case let .host(hostID): return hostID
@@ -113,6 +118,12 @@ final class AppState {
     }
 
     func select(_ newSelection: FleetSelection) {
+        activeNotificationTargetRoute = nil
+        unresolvedNotificationTarget = nil
+        setSelection(newSelection)
+    }
+
+    private func setSelection(_ newSelection: FleetSelection) {
         selection = newSelection
         switch newSelection {
         case let .host(hostID): AppTelemetry.selected(kind: "host", identifier: hostID)
@@ -146,6 +157,10 @@ final class AppState {
     func apply(_ delivery: LiveFleetDelivery) {
         let reduction = presentationReducer.reduce(delivery, current: presentation)
         presentation = reduction.presentation
+        if let isPartial = reduction.acceptedFreshSnapshotIsPartial {
+            currentSnapshotIsPartial = isPartial
+        }
+        resolveActiveNotificationTargetIfNeeded()
         reconcileSelection()
         if let snapshot = reduction.acceptedFreshSnapshot {
             lastAcceptedFreshSnapshotForNotifications = snapshot
@@ -175,6 +190,12 @@ final class AppState {
 
     func waitForNotificationEvaluation() async {
         await notificationTask?.value
+    }
+
+    func handleNotificationResponse(_ route: FleetAlertRoute) {
+        notificationNavigationRequest = NotificationNavigationRequest(route: route)
+        activeNotificationTargetRoute = route
+        resolveNotificationTarget(route)
     }
 
     private func surfaceDidAppear(_ surface: FleetSurface) {
@@ -210,6 +231,27 @@ final class AppState {
             : "Some alerts could not be delivered and will be retried on the next fresh update."
     }
 
+    private func resolveNotificationTarget(_ route: FleetAlertRoute) {
+        let exactSelection = FleetSelection.lane(jobID: route.jobID, laneID: route.laneID)
+        guard !currentSnapshotIsPartial,
+              snapshot?.job(id: route.jobID)?.hostID == route.hostID,
+              snapshot?.detail(for: exactSelection) != nil else {
+            selection = nil
+            unresolvedNotificationTarget = UnresolvedNotificationTarget(
+                route: route,
+                reason: currentSnapshotIsPartial ? .partialSnapshot : .targetUnavailable
+            )
+            return
+        }
+        unresolvedNotificationTarget = nil
+        setSelection(exactSelection)
+    }
+
+    private func resolveActiveNotificationTargetIfNeeded() {
+        guard let activeNotificationTargetRoute else { return }
+        resolveNotificationTarget(activeNotificationTargetRoute)
+    }
+
     private func reschedulePolling() {
         pollTask?.cancel()
         pollTask = nil
@@ -226,6 +268,7 @@ final class AppState {
     }
 
     private func reconcileSelection() {
+        guard unresolvedNotificationTarget == nil else { return }
         if let selection, snapshot?.detail(for: selection) != nil { return }
         selection = snapshot?.hosts.first.map { .host(hostID: $0.id) }
     }

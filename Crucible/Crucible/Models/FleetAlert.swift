@@ -2,14 +2,91 @@ import Foundation
 
 nonisolated struct FleetAlert: Equatable, Identifiable, Sendable {
     let episodeID: String
+    let conditionType: String
     let title: String
     let subtitle: String
     let body: String
     let hostID: String
     let jobID: String
     let laneID: String
+    let sourceTimestamp: Date
 
     var id: String { episodeID }
+
+    var route: FleetAlertRoute {
+        FleetAlertRoute(
+            conditionEpisodeID: episodeID,
+            conditionType: conditionType,
+            hostID: hostID,
+            jobID: jobID,
+            laneID: laneID,
+            sourceTimestamp: sourceTimestamp
+        )
+    }
+}
+
+nonisolated struct FleetAlertRoute: Equatable, Sendable {
+    let conditionEpisodeID: String
+    let conditionType: String
+    let hostID: String
+    let jobID: String
+    let laneID: String
+    let sourceTimestamp: Date
+
+    private enum Key {
+        static let conditionEpisodeID = "condition_episode_id"
+        static let conditionType = "condition_type"
+        static let hostID = "host_id"
+        static let jobID = "job_id"
+        static let laneID = "lane_id"
+        static let sourceTimestamp = "source_timestamp"
+    }
+
+    var userInfo: [AnyHashable: Any] {
+        [
+            Key.conditionEpisodeID: conditionEpisodeID,
+            Key.conditionType: conditionType,
+            Key.hostID: hostID,
+            Key.jobID: jobID,
+            Key.laneID: laneID,
+            Key.sourceTimestamp: sourceTimestamp.timeIntervalSince1970,
+        ]
+    }
+
+    init(
+        conditionEpisodeID: String,
+        conditionType: String,
+        hostID: String,
+        jobID: String,
+        laneID: String,
+        sourceTimestamp: Date
+    ) {
+        self.conditionEpisodeID = conditionEpisodeID
+        self.conditionType = conditionType
+        self.hostID = hostID
+        self.jobID = jobID
+        self.laneID = laneID
+        self.sourceTimestamp = sourceTimestamp
+    }
+
+    init?(userInfo: [AnyHashable: Any]) {
+        guard let conditionEpisodeID = userInfo[Key.conditionEpisodeID] as? String,
+              let conditionType = userInfo[Key.conditionType] as? String,
+              let hostID = userInfo[Key.hostID] as? String,
+              let jobID = userInfo[Key.jobID] as? String,
+              let laneID = userInfo[Key.laneID] as? String,
+              let timestamp = (userInfo[Key.sourceTimestamp] as? NSNumber)?.doubleValue else {
+            return nil
+        }
+        self.init(
+            conditionEpisodeID: conditionEpisodeID,
+            conditionType: conditionType,
+            hostID: hostID,
+            jobID: jobID,
+            laneID: laneID,
+            sourceTimestamp: Date(timeIntervalSince1970: timestamp)
+        )
+    }
 }
 
 enum ImportantConditionAlertPlanner {
@@ -22,25 +99,34 @@ enum ImportantConditionAlertPlanner {
     }
 
     static func alerts(for snapshot: FleetSnapshot) -> [FleetAlert] {
-        snapshot.conditions.compactMap(alert(for:))
+        snapshot.conditions.compactMap { alert(for: $0, in: snapshot) }
     }
 
-    private static func alert(for condition: FleetConditionSnapshot) -> FleetAlert? {
+    private static func alert(
+        for condition: FleetConditionSnapshot,
+        in snapshot: FleetSnapshot
+    ) -> FleetAlert? {
         guard let kind = ConditionKind(rawValue: condition.type),
               let hostID = condition.hostID,
               let jobID = condition.jobID,
               let laneID = condition.laneID else {
             return nil
         }
+        let job = snapshot.job(id: jobID)
+        let laneName = job?.lanes.first(where: { $0.id == laneID })?.name ?? laneID
+        let laneLabel = laneName == laneID ? laneID : "\(laneName) (\(laneID))"
+        let jobLabel = job?.title ?? "Job \(jobID)"
 
         return FleetAlert(
             episodeID: condition.id,
-            title: title(for: kind),
-            subtitle: "\(hostID) · \(jobID) · \(laneID)",
-            body: body(for: kind, condition: condition),
+            conditionType: condition.type,
+            title: "\(title(for: kind)) · \(jobID)",
+            subtitle: "\(jobLabel) · \(hostID)",
+            body: "\(laneLabel): \(body(for: kind, condition: condition)) Source \(sourceLabel(snapshot.sourceTimestamp)).",
             hostID: hostID,
             jobID: jobID,
-            laneID: laneID
+            laneID: laneID,
+            sourceTimestamp: snapshot.sourceTimestamp
         )
     }
 
@@ -94,7 +180,7 @@ enum ImportantConditionAlertPlanner {
                 limitLabel: "hard limit"
             )
         }
-        return "\(detail) Open Crucible to inspect this lane."
+        return detail
     }
 
     private static func durationDetail(
@@ -140,5 +226,9 @@ enum ImportantConditionAlertPlanner {
             return String(format: "%.1fK", value / 1_000)
         }
         return value.formatted(.number.precision(.fractionLength(0)))
+    }
+
+    private static func sourceLabel(_ date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
     }
 }

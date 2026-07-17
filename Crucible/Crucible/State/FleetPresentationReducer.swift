@@ -3,6 +3,7 @@ import Foundation
 struct FleetPresentationReduction {
     let presentation: FleetPresentation
     let acceptedFreshSnapshot: FleetSnapshot?
+    let acceptedFreshSnapshotIsPartial: Bool?
 }
 
 @MainActor
@@ -25,7 +26,8 @@ struct FleetPresentationReducer {
         case let .snapshot(contract): reduce(contract, current: current)
         case let .error(envelope): FleetPresentationReduction(
             presentation: reduce(envelope, current: current),
-            acceptedFreshSnapshot: nil
+            acceptedFreshSnapshot: nil,
+            acceptedFreshSnapshotIsPartial: nil
         )
         }
     }
@@ -51,7 +53,8 @@ struct FleetPresentationReducer {
         if let prior, prior.sourceTimestamp > incoming.sourceTimestamp {
             return FleetPresentationReduction(
                 presentation: current,
-                acceptedFreshSnapshot: nil
+                acceptedFreshSnapshot: nil,
+                acceptedFreshSnapshotIsPartial: nil
             )
         }
 
@@ -65,7 +68,8 @@ struct FleetPresentationReducer {
                     errorMessage: nil,
                     isPreviewData: false
                 ),
-                acceptedFreshSnapshot: incoming
+                acceptedFreshSnapshot: incoming,
+                acceptedFreshSnapshotIsPartial: false
             )
         }
 
@@ -79,7 +83,8 @@ struct FleetPresentationReducer {
                     errorMessage: staleMessage(contract),
                     isPreviewData: false
                 ),
-                acceptedFreshSnapshot: nil
+                acceptedFreshSnapshot: nil,
+                acceptedFreshSnapshotIsPartial: nil
             )
         }
 
@@ -91,7 +96,8 @@ struct FleetPresentationReducer {
                 errorMessage: incompleteMessage(contract.completeness.reasons),
                 isPreviewData: false
             ),
-            acceptedFreshSnapshot: incoming
+            acceptedFreshSnapshot: incoming,
+            acceptedFreshSnapshotIsPartial: true
         )
     }
 

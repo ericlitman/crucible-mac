@@ -8,7 +8,11 @@ struct FleetDashboardView: View {
             DashboardStatusBar(state: state)
             Divider()
 
-            if let snapshot = state.snapshot {
+            if let unresolvedTarget = state.unresolvedNotificationTarget,
+               state.snapshot == nil {
+                UnresolvedNotificationTargetView(target: unresolvedTarget)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let snapshot = state.snapshot {
                 NavigationSplitView {
                     HostSidebarView(state: state, snapshot: snapshot)
                 } content: {
@@ -18,7 +22,11 @@ struct FleetDashboardView: View {
                         QueueWorkView(state: state, snapshot: snapshot)
                     }
                 } detail: {
-                    FleetDetailView(detail: state.selectionDetail)
+                    if let unresolvedTarget = state.unresolvedNotificationTarget {
+                        UnresolvedNotificationTargetView(target: unresolvedTarget)
+                    } else {
+                        FleetDetailView(detail: state.selectionDetail)
+                    }
                 }
                 .navigationSplitViewStyle(.balanced)
             } else {
@@ -36,6 +44,34 @@ struct FleetDashboardView: View {
         }
         .onDisappear {
             state.dashboardDidDisappear()
+        }
+    }
+}
+
+private struct UnresolvedNotificationTargetView: View {
+    let target: UnresolvedNotificationTarget
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Alert target unavailable", systemImage: "bell.badge.slash")
+        } description: {
+            VStack(spacing: 8) {
+                Text(reasonText)
+                Text("\(target.route.hostID) · \(target.route.jobID) · \(target.route.laneID)")
+                    .font(.caption.monospaced())
+                Text("\(target.route.conditionType) · Source \(target.route.sourceTimestamp.formatted(.iso8601))")
+                    .font(.caption)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var reasonText: String {
+        switch target.reason {
+        case .partialSnapshot:
+            "The current CLI snapshot is partial, so Crucible cannot safely resolve this alert yet."
+        case .targetUnavailable:
+            "The current CLI snapshot does not contain this exact lane. The requested target is preserved for a later refresh."
         }
     }
 }

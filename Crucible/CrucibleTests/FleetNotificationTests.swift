@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UserNotifications
 @testable import Crucible
 
 @MainActor
@@ -19,16 +20,147 @@ struct FleetNotificationTests {
 
         #expect(alerts.map(\.episodeID) == ["stall", "time-soft", "time-hard", "token-soft", "token-hard"])
         #expect(alerts.map(\.title) == [
-            "Lane stalled",
-            "Soft time limit exceeded",
-            "Hard time limit exceeded",
-            "Soft token limit exceeded",
-            "Hard token limit exceeded",
+            "Lane stalled · MOB-1325",
+            "Soft time limit exceeded · MOB-1325",
+            "Hard time limit exceeded · MOB-1325",
+            "Soft token limit exceeded · MOB-1325",
+            "Hard token limit exceeded · MOB-1325",
         ])
-        #expect(alerts.allSatisfy { $0.subtitle == "pro16 · MOB-1325 · implementer" })
-        #expect(alerts[0].body == "No meaningful progress for 12m; stall threshold is 10m. Open Crucible to inspect this lane.")
-        #expect(alerts[2].body == "Running for 1h 0m; hard limit is 1h 0m. Open Crucible to inspect this lane.")
-        #expect(alerts[3].body == "Used 205.0K tokens; soft limit is 200.0K. Open Crucible to inspect this lane.")
+        #expect(alerts.allSatisfy { $0.subtitle == "Controller fleet visibility · pro16" })
+        #expect(alerts[0].body == "Implementation (implementer): No meaningful progress for 12m; stall threshold is 10m. Source 2025-07-16T11:26:40Z.")
+        #expect(alerts[2].body == "Implementation (implementer): Running for 1h 0m; hard limit is 1h 0m. Source 2025-07-16T11:26:40Z.")
+        #expect(alerts[3].body == "Implementation (implementer): Used 205.0K tokens; soft limit is 200.0K. Source 2025-07-16T11:26:40Z.")
+        #expect(alerts[0].conditionType == "no_progress_stall")
+        #expect(alerts[0].sourceTimestamp == snapshot(conditions: []).sourceTimestamp)
+    }
+
+    @Test("Foreground notifications use visible and audible native presentation options")
+    func foregroundPresentationOptions() {
+        let options = NotificationPresentationPolicy.foregroundOptions
+        #expect(options.contains(.banner))
+        #expect(options.contains(.list))
+        #expect(options.contains(.sound))
+    }
+
+    @Test("Fresh partial conditions remain actionable when the job record is truncated")
+    func truncatedPartialConditionUsesTruthfulIDs() throws {
+        let partial = FleetSnapshot(
+            contractVersion: "1",
+            sourceTimestamp: Date(timeIntervalSince1970: 1_752_665_200),
+            queue: [],
+            hosts: [],
+            conditions: [condition(id: "truncated")]
+        )
+
+        let alert = try #require(ImportantConditionAlertPlanner.alerts(for: partial).first)
+        #expect(alert.title == "Lane stalled · MOB-1325")
+        #expect(alert.subtitle == "Job MOB-1325 · pro16")
+        #expect(alert.body == "implementer: No meaningful progress for 12m; stall threshold is 10m. Source 2025-07-16T11:26:40Z.")
+    }
+
+    @Test("Notification routing payload round-trips every authoritative target field")
+    func routingPayloadRoundTrip() throws {
+        let alert = try #require(ImportantConditionAlertPlanner.alerts(
+            for: snapshot(conditions: [condition(id: "payload", type: "time_hard_bound_exceeded")])
+        ).first)
+
+        let decoded = try #require(FleetAlertRoute(userInfo: alert.route.userInfo))
+        #expect(decoded == alert.route)
+        #expect(decoded.conditionEpisodeID == "payload")
+        #expect(decoded.conditionType == "time_hard_bound_exceeded")
+        #expect(decoded.hostID == "pro16")
+        #expect(decoded.jobID == "MOB-1325")
+        #expect(decoded.laneID == "implementer")
+        #expect(decoded.sourceTimestamp == alert.sourceTimestamp)
+
+        var incompletePayload = alert.route.userInfo
+        incompletePayload.removeValue(forKey: "lane_id")
+        #expect(FleetAlertRoute(userInfo: incompletePayload) == nil)
+    }
+
+    @Test("Notification delegate decodes a response and delivers it on MainActor")
+    func delegateResponseBridge() async throws {
+        let route = alertRoute()
+        let delegate = CrucibleNotificationCenterDelegate()
+        var receivedRoute: FleetAlertRoute?
+        delegate.setResponseHandler { receivedRoute = $0 }
+
+        let responseTask = try #require(delegate.dispatchResponse(userInfo: route.userInfo))
+        await responseTask.value
+
+        #expect(receivedRoute == route)
+    }
+
+    @Test("Notification response selects the exact lane and emits a dashboard request")
+    func responseRoutesToExactLane() {
+        let state = AppState(initialPresentation: FleetPresentation(
+            snapshot: snapshot(conditions: []),
+            freshness: .live(asOf: snapshot(conditions: []).sourceTimestamp),
+            lastSuccessfulRefresh: snapshot(conditions: []).sourceTimestamp,
+            errorMessage: nil,
+            isPreviewData: false
+        ))
+        let route = alertRoute()
+
+        state.handleNotificationResponse(route)
+
+        #expect(state.selection == .lane(jobID: "MOB-1325", laneID: "implementer"))
+        #expect(state.selectionDetail?.title == "Implementation")
+        #expect(state.unresolvedNotificationTarget == nil)
+        #expect(state.notificationNavigationRequest?.route == route)
+    }
+
+    @Test("Unavailable and partial notification targets remain explicit until a complete snapshot resolves them")
+    func unresolvedTargetIsPreserved() throws {
+        let state = AppState(initialPresentation: .productionUnavailable)
+        let route = FleetAlertRoute(
+            conditionEpisodeID: "pending-route",
+            conditionType: "no_progress_stall",
+            hostID: "pro16",
+            jobID: "job-1",
+            laneID: "implement",
+            sourceTimestamp: Date(timeIntervalSince1970: 1_752_665_200)
+        )
+
+        state.handleNotificationResponse(route)
+        #expect(state.selection == nil)
+        #expect(state.selectedHostID == nil)
+        #expect(state.unresolvedNotificationTarget?.route == route)
+        #expect(state.unresolvedNotificationTarget?.reason == .targetUnavailable)
+
+        state.apply(try delivery(.incomplete, conditions: [condition(id: "partial-route")]))
+        #expect(state.selection == nil)
+        #expect(state.selectedHostID == nil)
+        #expect(state.unresolvedNotificationTarget?.route == route)
+        #expect(state.unresolvedNotificationTarget?.reason == .partialSnapshot)
+
+        state.apply(try delivery(.healthy, conditions: [condition(id: "complete-route")]))
+        #expect(state.selection == .lane(jobID: "job-1", laneID: "implement"))
+        #expect(state.unresolvedNotificationTarget == nil)
+
+        state.apply(try delivery(
+            .healthy,
+            conditions: [],
+            generatedAt: "2026-07-16T12:01:05.000Z",
+            sourceObservedAt: "2026-07-16T12:01:00.000Z"
+        ))
+        #expect(state.selection == nil)
+        #expect(state.selectedHostID == nil)
+        #expect(state.unresolvedNotificationTarget?.route == route)
+        #expect(state.unresolvedNotificationTarget?.reason == .targetUnavailable)
+
+        state.selectHost("pro16")
+        #expect(state.selection == .host(hostID: "pro16"))
+        #expect(state.unresolvedNotificationTarget == nil)
+
+        state.apply(try delivery(
+            .healthy,
+            conditions: [condition(id: "target-returned")],
+            generatedAt: "2026-07-16T12:02:05.000Z",
+            sourceObservedAt: "2026-07-16T12:02:00.000Z"
+        ))
+        #expect(state.selection == .host(hostID: "pro16"))
+        #expect(state.unresolvedNotificationTarget == nil)
     }
 
     @Test("Planner refuses conditions that cannot identify host, job, and lane")
@@ -229,12 +361,61 @@ struct FleetNotificationTests {
         conditions: [FleetConditionSnapshot],
         sourceTimestamp: Date = Date(timeIntervalSince1970: 1_752_665_200)
     ) -> FleetSnapshot {
-        FleetSnapshot(
+        let lane = LaneSnapshot(
+            id: "implementer",
+            name: "Implementation",
+            state: .active,
+            currentStage: "Implement",
+            elapsedSeconds: 720,
+            lastMeaningfulProgressAt: sourceTimestamp.addingTimeInterval(-720),
+            retryCount: 0,
+            restartCount: 0,
+            recoverableFailures: [],
+            tokenUse: 10_000,
+            tokenBounds: TokenBounds(soft: 200_000, hard: 250_000),
+            timeBounds: TimeBounds(softSeconds: 1_260, hardSeconds: 3_600)
+        )
+        let job = JobSnapshot(
+            id: "MOB-1325",
+            hostID: "pro16",
+            title: "Controller fleet visibility",
+            state: .active,
+            currentStage: "Implement",
+            elapsedSeconds: 720,
+            lastMeaningfulProgressAt: sourceTimestamp.addingTimeInterval(-720),
+            retryCount: 0,
+            restartCount: 0,
+            recoverableFailures: [],
+            tokenUse: 10_000,
+            tokenBounds: TokenBounds(soft: nil, hard: nil),
+            timeBounds: TimeBounds(softSeconds: nil, hardSeconds: nil),
+            lanes: [lane]
+        )
+        let host = HostSnapshot(
+            id: "pro16",
+            displayName: "pro16",
+            condition: .busy,
+            activeLaneCount: 1,
+            laneCapacity: 10,
+            jobs: [job]
+        )
+        return FleetSnapshot(
             contractVersion: "1",
             sourceTimestamp: sourceTimestamp,
             queue: [],
-            hosts: [],
+            hosts: [host],
             conditions: conditions
+        )
+    }
+
+    private func alertRoute() -> FleetAlertRoute {
+        FleetAlertRoute(
+            conditionEpisodeID: "route",
+            conditionType: "no_progress_stall",
+            hostID: "pro16",
+            jobID: "MOB-1325",
+            laneID: "implementer",
+            sourceTimestamp: Date(timeIntervalSince1970: 1_752_665_200)
         )
     }
 

@@ -32,11 +32,25 @@ nonisolated protocol SystemNotificationClient: Sendable {
     func deliver(_ alert: FleetAlert) async throws
 }
 
+nonisolated enum NotificationPresentationPolicy {
+    static let foregroundOptions: UNNotificationPresentationOptions = [.banner, .list, .sound]
+}
+
 nonisolated final class UserNotificationClient: SystemNotificationClient, @unchecked Sendable {
     private let center: UNUserNotificationCenter
+    private let delegate: CrucibleNotificationCenterDelegate
 
     init(center: UNUserNotificationCenter = .current()) {
+        let delegate = CrucibleNotificationCenterDelegate()
         self.center = center
+        self.delegate = delegate
+        center.delegate = delegate
+    }
+
+    func setResponseHandler(
+        _ handler: @escaping @MainActor @Sendable (FleetAlertRoute) -> Void
+    ) {
+        delegate.setResponseHandler(handler)
     }
 
     func authorizationState() async -> NotificationAuthorizationState {
@@ -55,12 +69,7 @@ nonisolated final class UserNotificationClient: SystemNotificationClient, @unche
         content.subtitle = alert.subtitle
         content.body = alert.body
         content.sound = .default
-        content.userInfo = [
-            "condition_episode_id": alert.episodeID,
-            "host_id": alert.hostID,
-            "job_id": alert.jobID,
-            "lane_id": alert.laneID,
-        ]
+        content.userInfo = alert.route.userInfo
         try await center.add(UNNotificationRequest(
             identifier: alert.episodeID,
             content: content,
@@ -77,5 +86,44 @@ nonisolated final class UserNotificationClient: SystemNotificationClient, @unche
         case .authorized, .provisional, .ephemeral: .authorized
         @unknown default: .unknown
         }
+    }
+}
+
+nonisolated final class CrucibleNotificationCenterDelegate: NSObject,
+    UNUserNotificationCenterDelegate,
+    @unchecked Sendable
+{
+    typealias ResponseHandler = @MainActor @Sendable (FleetAlertRoute) -> Void
+
+    private let lock = NSLock()
+    private var responseHandler: ResponseHandler?
+
+    func setResponseHandler(_ handler: @escaping ResponseHandler) {
+        lock.withLock { responseHandler = handler }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler(NotificationPresentationPolicy.foregroundOptions)
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        _ = dispatchResponse(userInfo: response.notification.request.content.userInfo)
+        completionHandler()
+    }
+
+    @discardableResult
+    func dispatchResponse(userInfo: [AnyHashable: Any]) -> Task<Void, Never>? {
+        let route = FleetAlertRoute(userInfo: userInfo)
+        let handler = lock.withLock { responseHandler }
+        guard let route, let handler else { return nil }
+        return Task { @MainActor in handler(route) }
     }
 }
