@@ -50,6 +50,10 @@ if [[ "${CRUCIBLE_SMOKE_SKIP_PANEL:-0}" != "1" ]]; then
   sleep 4
   PANEL_GEOMETRY="$(osascript <<'EOF' 2>&1 || true
 tell application "System Events"
+  repeat with attempt from 1 to 40
+    if exists menu bar 2 of process "Crucible" then exit repeat
+    delay 0.5
+  end repeat
   tell process "Crucible"
     click menu bar item 1 of menu bar 2
     repeat with attempt from 1 to 10
