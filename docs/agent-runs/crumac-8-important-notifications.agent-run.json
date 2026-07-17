@@ -54,7 +54,7 @@
     {
       "item_id": "AC-6",
       "status": "not_checked",
-      "notes": "Important-only mode, a deterministic 512-entry hard cap on the persisted successful-delivery ledger, newest-identity retention, and unchanged-episode deduplication are implemented. All-major mode remains intentionally unavailable until CRUMAC-15 supplies the ordered replayable CLI event feed; snapshot differencing was not introduced."
+      "notes": "Important-only mode, a deterministic 512-entry hard cap on the persisted successful-delivery ledger, capacity admission before system scheduling, no runtime eviction of successful identities, and unchanged-episode deduplication are implemented. Overflow stays pending with an explicit retryable error until authoritative reconciliation frees capacity. A one-time migration of legacy over-capacity data retains the newest unique identities. All-major mode remains intentionally unavailable until CRUMAC-15 supplies the ordered replayable CLI event feed; snapshot differencing was not introduced."
     },
     {
       "item_id": "AC-7",
@@ -81,7 +81,7 @@
           "title": "Notification eligibility, authorization, retry, routing, and deduplication tests"
         }
       ],
-      "notes": "The exact head passes all 81 AppKit-free tests, including alert episode identity, bounded successful-delivery persistence, authorization retry, scheduling failure, stale-evaluation supersession, and routing tests, plus a warnings-as-errors Release build. Packaged status-item viewport, scrolling, and teardown acceptance remains outstanding, so the full criterion is not claimed."
+      "notes": "The exact head passes all 82 AppKit-free tests, including alert episode identity, bounded successful-delivery persistence, capacity-plus-one admission and eventual retry, authorization retry, scheduling failure, stale-evaluation supersession, and routing tests, plus a warnings-as-errors Release build. Packaged status-item viewport, scrolling, and teardown acceptance remains outstanding, so the full criterion is not claimed."
     },
     {
       "item_id": "AC-11",
