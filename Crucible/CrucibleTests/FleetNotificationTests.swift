@@ -110,10 +110,30 @@ struct FleetNotificationTests {
         var receivedRoute: FleetAlertRoute?
         delegate.setResponseHandler { receivedRoute = $0 }
 
-        let responseTask = try #require(delegate.dispatchResponse(userInfo: route.userInfo))
-        await responseTask.value
+        await withCheckedContinuation { continuation in
+            delegate.dispatchResponse(userInfo: route.userInfo) {
+                continuation.resume()
+            }
+        }
 
         #expect(receivedRoute == route)
+    }
+
+    @Test("Notification response completion follows the MainActor route mutation")
+    func responseCompletionFollowsRouteMutation() async {
+        let route = alertRoute()
+        let delegate = CrucibleNotificationCenterDelegate()
+        let recorder = ThreadSafeEventRecorder()
+        delegate.setResponseHandler { _ in recorder.record("route") }
+
+        await withCheckedContinuation { continuation in
+            delegate.dispatchResponse(userInfo: route.userInfo) {
+                recorder.record("completion")
+                continuation.resume()
+            }
+        }
+
+        #expect(recorder.events == ["route", "completion"])
     }
 
     @Test("Notification response selects the exact lane and emits a dashboard request")
@@ -309,6 +329,70 @@ struct FleetNotificationTests {
         #expect(state.notificationAuthorizationState == .authorized)
         #expect(state.notificationErrorMessage == nil)
         #expect(client.deliveredAlerts.map(\.episodeID) == ["settings-active"])
+    }
+
+    @Test("A permission retry evaluates the latest snapshot after an active condition resolves")
+    func permissionRetryUsesLatestResolvedSnapshot() async throws {
+        let client = FakeSystemNotificationClient(
+            authorizationState: .authorized,
+            authorizationResponses: [
+                StubAuthorizationResponse(state: .notDetermined, delay: .milliseconds(200)),
+                StubAuthorizationResponse(state: .authorized),
+                StubAuthorizationResponse(state: .authorized),
+            ]
+        )
+        let store = MemoryNotificationEpisodeStore()
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(client: client, episodeStore: store)
+        )
+
+        state.apply(try delivery(.healthy, conditions: [condition(id: "resolved-during-retry")]))
+        await waitUntil { client.authorizationStateRequestCount == 1 }
+        let settingsRetry = Task { await state.notificationSettingsDidBecomeActive() }
+
+        // A non-serialized retry can complete and capture the active snapshot while
+        // the first notification evaluation is still awaiting its older result.
+        try await Task.sleep(for: .milliseconds(50))
+        state.apply(try delivery(
+            .healthy,
+            conditions: [],
+            generatedAt: "2026-07-16T12:01:05.000Z",
+            sourceObservedAt: "2026-07-16T12:01:00.000Z"
+        ))
+
+        await settingsRetry.value
+        await state.waitForNotificationEvaluation()
+
+        #expect(client.deliveredAlerts.isEmpty)
+        #expect(!store.contains("resolved-during-retry"))
+    }
+
+    @Test("Overlapping authorization refreshes cannot let an older response win")
+    func authorizationRefreshesRemainOrdered() async {
+        let client = FakeSystemNotificationClient(
+            authorizationState: .unknown,
+            authorizationResponses: [
+                StubAuthorizationResponse(state: .denied, delay: .milliseconds(150)),
+                StubAuthorizationResponse(state: .authorized),
+            ]
+        )
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(
+                client: client,
+                episodeStore: MemoryNotificationEpisodeStore()
+            )
+        )
+
+        let olderRefresh = Task { await state.refreshNotificationAuthorizationState() }
+        await waitUntil { client.authorizationStateRequestCount == 1 }
+        let newerRefresh = Task { await state.refreshNotificationAuthorizationState() }
+        await olderRefresh.value
+        await newerRefresh.value
+
+        #expect(client.authorizationStateRequestCount == 2)
+        #expect(state.notificationAuthorizationState == .authorized)
     }
 
     @Test("A fresh partial snapshot is accepted for notifications")
@@ -609,6 +693,19 @@ struct FleetNotificationTests {
         object["counts"] = counts
         return try LiveFleetContractParser.parse(encodedFixture(object))
     }
+
+    private func waitUntil(
+        _ predicate: @escaping @Sendable () -> Bool
+    ) async {
+        let deadline = ContinuousClock.now + .seconds(1)
+        while !predicate() {
+            guard ContinuousClock.now < deadline else {
+                Issue.record("Timed out waiting for asynchronous notification test state")
+                return
+            }
+            await Task.yield()
+        }
+    }
 }
 
 @MainActor
@@ -625,26 +722,39 @@ nonisolated private final class FakeSystemNotificationClient: SystemNotification
     private var currentAuthorizationState: NotificationAuthorizationState
     private var deliveryFailuresRemaining: Int
     private var authorizationRequestFailuresRemaining: Int
+    private var authorizationResponses: [StubAuthorizationResponse]
     private var storedRequestCount = 0
+    private var storedAuthorizationStateRequestCount = 0
     private var storedDeliveryAttemptCount = 0
     private var storedDeliveredAlerts: [FleetAlert] = []
 
     var requestCount: Int { lock.withLock { storedRequestCount } }
+    var authorizationStateRequestCount: Int { lock.withLock { storedAuthorizationStateRequestCount } }
     var deliveryAttemptCount: Int { lock.withLock { storedDeliveryAttemptCount } }
     var deliveredAlerts: [FleetAlert] { lock.withLock { storedDeliveredAlerts } }
 
     init(
         authorizationState: NotificationAuthorizationState,
         deliveryFailuresRemaining: Int = 0,
-        authorizationRequestFailuresRemaining: Int = 0
+        authorizationRequestFailuresRemaining: Int = 0,
+        authorizationResponses: [StubAuthorizationResponse] = []
     ) {
         currentAuthorizationState = authorizationState
         self.deliveryFailuresRemaining = deliveryFailuresRemaining
         self.authorizationRequestFailuresRemaining = authorizationRequestFailuresRemaining
+        self.authorizationResponses = authorizationResponses
     }
 
     func authorizationState() async -> NotificationAuthorizationState {
-        lock.withLock { currentAuthorizationState }
+        let response = lock.withLock {
+            storedAuthorizationStateRequestCount += 1
+            return authorizationResponses.isEmpty ? nil : authorizationResponses.removeFirst()
+        }
+        guard let response else { return lock.withLock { currentAuthorizationState } }
+        if response.delay > .zero {
+            try? await Task.sleep(for: response.delay)
+        }
+        return response.state
     }
 
     func requestAuthorization() async throws -> NotificationAuthorizationState {
@@ -678,6 +788,30 @@ nonisolated private final class FakeSystemNotificationClient: SystemNotification
 
     func setAuthorizationState(_ state: NotificationAuthorizationState) {
         lock.withLock { currentAuthorizationState = state }
+    }
+}
+
+nonisolated private struct StubAuthorizationResponse: Sendable {
+    let state: NotificationAuthorizationState
+    let delay: Duration
+
+    init(
+        state: NotificationAuthorizationState,
+        delay: Duration = .zero
+    ) {
+        self.state = state
+        self.delay = delay
+    }
+}
+
+nonisolated private final class ThreadSafeEventRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedEvents: [String] = []
+
+    var events: [String] { lock.withLock { storedEvents } }
+
+    func record(_ event: String) {
+        lock.withLock { storedEvents.append(event) }
     }
 }
 

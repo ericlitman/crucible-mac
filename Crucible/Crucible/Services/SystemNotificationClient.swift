@@ -115,15 +115,38 @@ nonisolated final class CrucibleNotificationCenterDelegate: NSObject,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        _ = dispatchResponse(userInfo: response.notification.request.content.userInfo)
-        completionHandler()
+        dispatchResponse(
+            userInfo: response.notification.request.content.userInfo,
+            completionHandler: completionHandler
+        )
     }
 
-    @discardableResult
-    func dispatchResponse(userInfo: [AnyHashable: Any]) -> Task<Void, Never>? {
+    func dispatchResponse(
+        userInfo: [AnyHashable: Any],
+        completionHandler: @escaping () -> Void
+    ) {
         let route = FleetAlertRoute(userInfo: userInfo)
         let handler = lock.withLock { responseHandler }
-        guard let route, let handler else { return nil }
-        return Task { @MainActor in handler(route) }
+        guard let route, let handler else {
+            completionHandler()
+            return
+        }
+        let completion = NotificationResponseCompletion(completionHandler)
+        Task { @MainActor in
+            handler(route)
+            completion.call()
+        }
+    }
+}
+
+nonisolated private final class NotificationResponseCompletion: @unchecked Sendable {
+    private let handler: () -> Void
+
+    init(_ handler: @escaping () -> Void) {
+        self.handler = handler
+    }
+
+    func call() {
+        handler()
     }
 }

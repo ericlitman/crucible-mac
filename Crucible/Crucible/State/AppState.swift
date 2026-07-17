@@ -175,26 +175,33 @@ final class AppState {
     }
 
     func refreshNotificationAuthorizationState() async {
-        guard let notificationCoordinator else { return }
-        notificationAuthorizationState = await notificationCoordinator.authorizationState()
+        let task = enqueueNotificationOperation { state, coordinator in
+            state.notificationAuthorizationState = await coordinator.authorizationState()
+        }
+        await task?.value
     }
 
     func notificationSettingsDidBecomeActive() async {
-        notificationErrorMessage = nil
-        await refreshNotificationAuthorizationState()
-        await deliverLastAcceptedSnapshotIfAuthorized()
+        let task = enqueueNotificationOperation { state, coordinator in
+            state.notificationErrorMessage = nil
+            state.notificationAuthorizationState = await coordinator.authorizationState()
+            await state.deliverLatestAcceptedSnapshotIfAuthorized(using: coordinator)
+        }
+        await task?.value
     }
 
     func requestNotificationAuthorization() async {
-        guard let notificationCoordinator else { return }
-        notificationErrorMessage = nil
-        do {
-            notificationAuthorizationState = try await notificationCoordinator.requestAuthorization()
-            await deliverLastAcceptedSnapshotIfAuthorized()
-        } catch {
-            notificationErrorMessage = "Notification permission could not be updated: \(error.localizedDescription)"
-            await refreshNotificationAuthorizationState()
+        let task = enqueueNotificationOperation { state, coordinator in
+            state.notificationErrorMessage = nil
+            do {
+                state.notificationAuthorizationState = try await coordinator.requestAuthorization()
+                await state.deliverLatestAcceptedSnapshotIfAuthorized(using: coordinator)
+            } catch {
+                state.notificationErrorMessage = "Notification permission could not be updated: \(error.localizedDescription)"
+                state.notificationAuthorizationState = await coordinator.authorizationState()
+            }
         }
+        await task?.value
     }
 
     func waitForNotificationEvaluation() async {
@@ -227,23 +234,39 @@ final class AppState {
         for snapshot: FleetSnapshot,
         isAuthoritativeComplete: Bool
     ) {
-        guard let notificationCoordinator else { return }
-        let precedingTask = notificationTask
-        notificationTask = Task { @MainActor [weak self] in
-            await precedingTask?.value
-            guard let self else { return }
-            self.applyNotificationResult(await notificationCoordinator.process(
+        _ = enqueueNotificationOperation { state, coordinator in
+            state.applyNotificationResult(await coordinator.process(
                 snapshot,
                 isAuthoritativeComplete: isAuthoritativeComplete
             ))
         }
     }
 
-    private func deliverLastAcceptedSnapshotIfAuthorized() async {
+    @discardableResult
+    private func enqueueNotificationOperation(
+        _ operation: @escaping @MainActor (
+            AppState,
+            FleetNotificationCoordinator
+        ) async -> Void
+    ) -> Task<Void, Never>? {
+        // Permission, reconciliation, and delivery share one ordered lane so an
+        // older suspension cannot overwrite or notify after newer accepted state.
+        guard let notificationCoordinator else { return nil }
+        let precedingTask = notificationTask
+        let task = Task { @MainActor [weak self] in
+            await precedingTask?.value
+            guard let self else { return }
+            await operation(self, notificationCoordinator)
+        }
+        notificationTask = task
+        return task
+    }
+
+    private func deliverLatestAcceptedSnapshotIfAuthorized(
+        using notificationCoordinator: FleetNotificationCoordinator
+    ) async {
         guard notificationAuthorizationState == .authorized,
-              let notificationCoordinator,
               let snapshot = lastAcceptedFreshSnapshotForNotifications else { return }
-        await notificationTask?.value
         applyNotificationResult(await notificationCoordinator.process(
             snapshot,
             isAuthoritativeComplete: lastAcceptedFreshSnapshotIsAuthoritativeComplete
