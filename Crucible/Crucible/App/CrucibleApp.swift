@@ -27,9 +27,14 @@ private struct CrucibleRuntimeApp: App {
     init() {
         let presentation = PreviewHarness.initialPresentation()
         let coordinator = presentation.isPreviewData ? nil : FleetRefreshCoordinator(client: ProcessCrucibleCLIClient())
+        let notificationCoordinator = FleetNotificationCoordinator(
+            client: UserNotificationClient(),
+            episodeStore: UserDefaultsNotificationEpisodeStore()
+        )
         _state = State(initialValue: AppState(
             initialPresentation: presentation,
             refreshCoordinator: coordinator,
+            notificationCoordinator: notificationCoordinator,
             automaticallyStarts: coordinator != nil
         ))
     }
@@ -49,6 +54,10 @@ private struct CrucibleRuntimeApp: App {
         }
         .defaultSize(width: 940, height: 620)
         .windowResizability(.contentMinSize)
+
+        Settings {
+            NotificationSettingsView(state: state)
+        }
     }
 }
 

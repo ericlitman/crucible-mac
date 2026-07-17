@@ -8,26 +8,37 @@ final class AppState {
     private(set) var selection: FleetSelection?
     private(set) var isRefreshing = false
     private(set) var visibleSurfaces: Set<FleetSurface> = []
+    private(set) var notificationAuthorizationState: NotificationAuthorizationState = .unknown
+    private(set) var notificationErrorMessage: String?
 
     private let refreshCoordinator: FleetRefreshCoordinator?
+    private let notificationCoordinator: FleetNotificationCoordinator?
     private var presentationReducer: FleetPresentationReducer
     private var refreshTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
+    private var notificationTask: Task<Void, Never>?
     private var pollingStarted = false
+    private var lastAcceptedFreshSnapshotForNotifications: FleetSnapshot?
 
     init(
         initialPresentation: FleetPresentation,
         refreshCoordinator: FleetRefreshCoordinator? = nil,
+        notificationCoordinator: FleetNotificationCoordinator? = nil,
         automaticallyStarts: Bool = false
     ) {
         presentation = initialPresentation
         presentationReducer = FleetPresentationReducer(initialPresentation: initialPresentation)
         self.refreshCoordinator = refreshCoordinator
+        self.notificationCoordinator = notificationCoordinator
         selection = initialPresentation.snapshot?.hosts.first.map { .host(hostID: $0.id) }
         AppTelemetry.launched(previewData: initialPresentation.isPreviewData)
 
         if automaticallyStarts {
-            Task { @MainActor [weak self] in self?.startPolling() }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.startPolling()
+                await self.refreshNotificationAuthorizationState()
+            }
         }
     }
 
@@ -133,8 +144,37 @@ final class AppState {
     }
 
     func apply(_ delivery: LiveFleetDelivery) {
-        presentation = presentationReducer.reduce(delivery, current: presentation)
+        let reduction = presentationReducer.reduce(delivery, current: presentation)
+        presentation = reduction.presentation
         reconcileSelection()
+        if let snapshot = reduction.acceptedFreshSnapshot {
+            lastAcceptedFreshSnapshotForNotifications = snapshot
+            scheduleNotifications(for: snapshot)
+        }
+    }
+
+    func refreshNotificationAuthorizationState() async {
+        guard let notificationCoordinator else { return }
+        notificationAuthorizationState = await notificationCoordinator.authorizationState()
+    }
+
+    func requestNotificationAuthorization() async {
+        guard let notificationCoordinator else { return }
+        notificationErrorMessage = nil
+        do {
+            notificationAuthorizationState = try await notificationCoordinator.requestAuthorization()
+            guard notificationAuthorizationState == .authorized,
+                  let snapshot = lastAcceptedFreshSnapshotForNotifications else { return }
+            await notificationTask?.value
+            applyNotificationResult(await notificationCoordinator.process(snapshot))
+        } catch {
+            notificationErrorMessage = "Notification permission could not be updated: \(error.localizedDescription)"
+            await refreshNotificationAuthorizationState()
+        }
+    }
+
+    func waitForNotificationEvaluation() async {
+        await notificationTask?.value
     }
 
     private func surfaceDidAppear(_ surface: FleetSurface) {
@@ -151,6 +191,23 @@ final class AppState {
 
     private func requestRefresh() {
         Task { @MainActor [weak self] in await self?.refreshNow() }
+    }
+
+    private func scheduleNotifications(for snapshot: FleetSnapshot) {
+        guard let notificationCoordinator else { return }
+        let precedingTask = notificationTask
+        notificationTask = Task { @MainActor [weak self] in
+            await precedingTask?.value
+            guard let self else { return }
+            self.applyNotificationResult(await notificationCoordinator.process(snapshot))
+        }
+    }
+
+    private func applyNotificationResult(_ result: FleetNotificationResult) {
+        notificationAuthorizationState = result.authorizationState
+        notificationErrorMessage = result.deliveryErrors.isEmpty
+            ? nil
+            : "Some alerts could not be delivered and will be retried on the next fresh update."
     }
 
     private func reschedulePolling() {
