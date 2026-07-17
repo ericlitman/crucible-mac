@@ -56,11 +56,15 @@ tell application "System Events"
       delay 1
       repeat with w in windows
         if subrole of w is "AXSystemDialog" then
-          set h to item 2 of (size of w)
+          set windowSize to (get size of w)
+          set h to item 2 of windowSize
           set sh to -1
           set g to UI element 1 of w
           repeat with c in UI elements of g
-            if role of c is "AXScrollArea" then set sh to item 2 of (size of c)
+            if role of c is "AXScrollArea" then
+              set scrollSize to (get size of c)
+              set sh to item 2 of scrollSize
+            end if
           end repeat
           key code 53
           return "panel_height=" & h & " scroll_height=" & sh
