@@ -2,10 +2,10 @@
 spec_format_version: "0.1"
 title: "Crucible.app Live Fleet Observability"
 artifact_type: "prd"
-spec_revision: 3
+spec_revision: 4
 author: "Eric Litman"
 created_at: "2026-07-15T22:42:50-04:00"
-updated_at: "2026-07-16T18:27:00-04:00"
+updated_at: "2026-07-16T23:02:50-04:00"
 linked_github_repo: "ericlitman/crucible-mac"
 applies_to:
   - component: "Crucible.app"
@@ -30,7 +30,7 @@ Build a native Swift macOS menu bar app that presents live fleet state from a ve
 in:
   - Display the current queue, host, job, lane, and pipeline-stage state supplied by a versioned Crucible CLI contract.
   - Add missing fleet intelligence to the Crucible CLI before consuming it in the app.
-  - Notify for important operational problems and optionally for all major state changes.
+  - Notify for important operational problems and optionally for all major state changes using durable condition and transition identities supplied by the Crucible CLI.
   - Ship a native macOS menu bar experience using the approved Crucible artwork and an update path through Sparkle.
   - Follow the selective CodexBar alignment decision for native lifecycle, menu bar interaction, state flow, refresh behavior, and testing seams.
 out:
@@ -57,7 +57,7 @@ cut:
 - id: AC-5
   criterion: On the first successful refresh that observes a task with no meaningful progress for at least ten minutes, a lane beyond its time bound, or a lane beyond a soft or hard token bound, the app sends an actionable macOS notification identifying the affected host, job, lane, and condition.
 - id: AC-6
-  criterion: The operator can choose between notifications for all major state changes and notifications for important conditions only, and the app does not repeat a notification for the same unchanged transition or boundary condition.
+  criterion: The operator can choose between notifications for important conditions only and notifications for all major state changes; all-major mode consumes an ordered, replayable Crucible CLI event feed with stable identities and importance classification that covers host availability or pressure changes and job or lane admission, start, pipeline-stage boundary, retry, restart, recovery, completion, failure, block, and stall transitions occurring between refreshes, while the app persists successful delivery identities and never reconstructs transitions by comparing snapshots or repeats an unchanged event or boundary-condition episode.
 - id: AC-7
   criterion: When the CLI returns a fresh partial snapshot at least as recent as the displayed state, the app advances to that snapshot, labels it incomplete and non-live, preserves the last successful complete-refresh time, and exposes the incompleteness reasons; when a response is unavailable, incompatible, stale, or failed, the app preserves the newer known state, labels it non-live, and exposes a useful error; when any snapshot is older than the displayed state, the app ignores it and leaves the entire newer presentation unchanged.
 - id: AC-8
@@ -66,6 +66,8 @@ cut:
   criterion: A signed release of Crucible.app can discover and install an application update through Sparkle.
 - id: AC-10
   criterion: Given CLI response fixtures for healthy, stale, incompatible, and failed states, automated tests can exercise parsing, refresh policy, state transitions, alert deduplication, and menu or view models without launching AppKit, while a packaged-app smoke test verifies status-item creation and clean teardown.
+- id: AC-11
+  criterion: The app asks for macOS notification permission only after an explicit contextual operator action, always exposes the current system authorization state, does not mark an alert delivered when permission is absent or scheduling fails, and delivers any still-active important condition once after permission becomes available.
 ```
 
 ## Success Metrics
@@ -80,6 +82,8 @@ cut:
 ## User Experience
 
 The default surface should be glanceable from the menu bar, with progressive disclosure rather than a dashboard compressed into a popover. Status must not rely on color alone, and verification evidence for each user-visible acceptance criterion must include light- and dark-appearance screenshots.
+
+Notification delivery should build trust without manufacturing certainty. Important-only mode includes the required ten-minute stall and time or token boundary episodes. All-major mode additionally replays CLI-classified lifecycle events that occurred between polls. Enabling all-major mode seeds from the current cursor instead of replaying historical noise, while important conditions that are still active remain eligible until successfully delivered.
 
 ## Solution Alternatives
 
