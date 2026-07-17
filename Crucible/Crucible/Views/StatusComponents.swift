@@ -75,7 +75,18 @@ struct FleetConditionRow: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(condition.severity.rawValue), \(condition.title), \(condition.affectedLabel)")
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        var parts = [condition.severity.rawValue, condition.title, condition.affectedLabel]
+        if let actual = condition.actual, let bound = condition.bound {
+            parts.append("observed \(condition.formattedMeasure(actual)), bound \(condition.formattedMeasure(bound))")
+        }
+        if !compact, let action = condition.action {
+            parts.append(action)
+        }
+        return parts.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
