@@ -57,14 +57,25 @@ final class FleetNotificationCoordinator {
         var deliveryErrors: [String] = []
         for alert in alerts {
             guard shouldContinue() else { break }
-            guard !inFlightEpisodeIDs.contains(alert.episodeID),
-                  !episodeStore.contains(alert.episodeID) else { continue }
+            guard !inFlightEpisodeIDs.contains(alert.episodeID) else { continue }
+            switch episodeStore.admit(alert.episodeID) {
+            case .alreadyTracked:
+                continue
+            case .capacityReached:
+                deliveryErrors.append(
+                    "\(alert.episodeID): Delivery history is full; this alert will retry after resolved conditions free capacity."
+                )
+                continue
+            case .admitted:
+                break
+            }
             inFlightEpisodeIDs.insert(alert.episodeID)
             do {
                 try await client.deliver(alert)
                 episodeStore.record(alert.episodeID)
                 deliveredEpisodeIDs.append(alert.episodeID)
             } catch {
+                episodeStore.abandon(alert.episodeID)
                 deliveryErrors.append("\(alert.episodeID): \(error.localizedDescription)")
             }
             inFlightEpisodeIDs.remove(alert.episodeID)

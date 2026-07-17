@@ -632,31 +632,91 @@ struct FleetNotificationTests {
         #expect(defaults.stringArray(forKey: key)?.count == 20)
     }
 
-    @Test("Persisted delivery identities are capped by recency and retain deterministic deduplication order")
-    func persistenceIsBoundedByRecency() {
+    @Test("Persisted delivery identities never evict successful records to admit new episodes")
+    func persistenceUsesNoEvictionAdmission() {
         let suiteName = "CrucibleTests.Notifications.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let key = "episodes"
         defaults.set(
-            ["legacy-0", "legacy-1", "legacy-2", "legacy-1", "legacy-3"],
+            ["legacy-0", "legacy-1", "legacy-0", "legacy-2", "legacy-3"],
             forKey: key
         )
 
         let store = UserDefaultsNotificationEpisodeStore(defaults: defaults, key: key, capacity: 3)
-        #expect(defaults.stringArray(forKey: key) == ["legacy-2", "legacy-1", "legacy-3"])
+        #expect(defaults.stringArray(forKey: key) == ["legacy-0", "legacy-2", "legacy-3"])
+        #expect(store.admit("new") == .capacityReached)
+        #expect(defaults.stringArray(forKey: key) == ["legacy-0", "legacy-2", "legacy-3"])
 
+        store.reconcile(authoritativeActiveEpisodeIDs: ["legacy-2", "legacy-3", "new"])
+        #expect(defaults.stringArray(forKey: key) == ["legacy-2", "legacy-3"])
+        #expect(store.admit("new") == .admitted)
+        #expect(store.admit("overflow") == .capacityReached)
+        store.abandon("new")
+        #expect(store.admit("overflow") == .admitted)
+        store.abandon("overflow")
+        #expect(store.admit("new") == .admitted)
         store.record("new")
-        #expect(defaults.stringArray(forKey: key) == ["legacy-1", "legacy-3", "new"])
-        #expect(!store.contains("legacy-2"))
+        #expect(defaults.stringArray(forKey: key) == ["legacy-2", "legacy-3", "new"])
 
-        store.record("legacy-1")
-        #expect(defaults.stringArray(forKey: key) == ["legacy-3", "new", "legacy-1"])
+        #expect(store.admit("new") == .alreadyTracked)
+        #expect(store.admit("overflow") == .capacityReached)
+    }
 
-        store.reconcile(authoritativeActiveEpisodeIDs: ["new", "legacy-1"])
-        #expect(defaults.stringArray(forKey: key) == ["new", "legacy-1"])
-        #expect(store.contains("new"))
-        #expect(store.contains("legacy-1"))
+    @Test("Capacity overflow stays retryable without evicting or repeating successful alerts")
+    func capacityOverflowDoesNotRepeatDeliveredEpisodes() async {
+        let suiteName = "CrucibleTests.Notifications.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = UserDefaultsNotificationEpisodeStore(
+            defaults: defaults,
+            key: "episodes",
+            capacity: 3
+        )
+        let client = FakeSystemNotificationClient(authorizationState: .authorized)
+        let coordinator = FleetNotificationCoordinator(client: client, episodeStore: store)
+        let activeConditions = (0..<4).map { condition(id: "episode-\($0)") }
+        let activeSnapshot = snapshot(conditions: activeConditions)
+
+        let firstResult = await coordinator.process(activeSnapshot, isAuthoritativeComplete: true)
+        #expect(firstResult.deliveredEpisodeIDs == ["episode-0", "episode-1", "episode-2"])
+        #expect(firstResult.deliveryErrors.count == 1)
+        #expect(firstResult.deliveryErrors.first?.contains("episode-3") == true)
+        #expect(firstResult.deliveryErrors.first?.contains("will retry") == true)
+        #expect(client.deliveryAttemptCount == 3)
+        #expect(client.deliveredAlerts.map(\.episodeID) == ["episode-0", "episode-1", "episode-2"])
+        #expect(store.contains("episode-0"))
+        #expect(store.contains("episode-1"))
+        #expect(store.contains("episode-2"))
+        #expect(!store.contains("episode-3"))
+
+        let retryResult = await coordinator.process(activeSnapshot, isAuthoritativeComplete: true)
+        #expect(retryResult.deliveredEpisodeIDs.isEmpty)
+        #expect(retryResult.deliveryErrors.count == 1)
+        #expect(retryResult.deliveryErrors.first?.contains("episode-3") == true)
+        #expect(retryResult.deliveryErrors.first?.contains("will retry") == true)
+        #expect(client.deliveryAttemptCount == 3)
+        #expect(client.deliveredAlerts.map(\.episodeID) == ["episode-0", "episode-1", "episode-2"])
+        #expect(defaults.stringArray(forKey: "episodes") == [
+            "episode-0", "episode-1", "episode-2",
+        ])
+
+        let overflowOnlySnapshot = snapshot(conditions: [activeConditions[3]])
+        let recoveredResult = await coordinator.process(
+            overflowOnlySnapshot,
+            isAuthoritativeComplete: true
+        )
+        #expect(recoveredResult.deliveredEpisodeIDs == ["episode-3"])
+        #expect(recoveredResult.deliveryErrors.isEmpty)
+        #expect(client.deliveryAttemptCount == 4)
+        #expect(client.deliveredAlerts.map(\.episodeID) == [
+            "episode-0", "episode-1", "episode-2", "episode-3",
+        ])
+        #expect(!store.contains("episode-0"))
+        #expect(!store.contains("episode-1"))
+        #expect(!store.contains("episode-2"))
+        #expect(store.contains("episode-3"))
+        #expect(defaults.stringArray(forKey: "episodes") == ["episode-3"])
     }
 
     private func notificationHarness(
@@ -917,13 +977,30 @@ nonisolated private final class ThreadSafeEventRecorder: @unchecked Sendable {
 nonisolated private final class MemoryNotificationEpisodeStore: NotificationEpisodeStore, @unchecked Sendable {
     private let lock = NSLock()
     private var episodeIDs: Set<String> = []
+    private var admittedEpisodeIDs: Set<String> = []
 
     func contains(_ episodeID: String) -> Bool {
         lock.withLock { episodeIDs.contains(episodeID) }
     }
 
+    func admit(_ episodeID: String) -> NotificationEpisodeAdmission {
+        lock.withLock {
+            guard !episodeIDs.contains(episodeID),
+                  !admittedEpisodeIDs.contains(episodeID) else { return .alreadyTracked }
+            admittedEpisodeIDs.insert(episodeID)
+            return .admitted
+        }
+    }
+
     func record(_ episodeID: String) {
-        _ = lock.withLock { episodeIDs.insert(episodeID) }
+        lock.withLock {
+            _ = admittedEpisodeIDs.remove(episodeID)
+            episodeIDs.insert(episodeID)
+        }
+    }
+
+    func abandon(_ episodeID: String) {
+        _ = lock.withLock { admittedEpisodeIDs.remove(episodeID) }
     }
 
     func reconcile(authoritativeActiveEpisodeIDs: Set<String>) {

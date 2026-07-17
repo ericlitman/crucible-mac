@@ -1,8 +1,16 @@
 import Foundation
 
+nonisolated enum NotificationEpisodeAdmission: Equatable, Sendable {
+    case admitted
+    case alreadyTracked
+    case capacityReached
+}
+
 nonisolated protocol NotificationEpisodeStore: Sendable {
     func contains(_ episodeID: String) -> Bool
+    func admit(_ episodeID: String) -> NotificationEpisodeAdmission
     func record(_ episodeID: String)
+    func abandon(_ episodeID: String)
     func reconcile(authoritativeActiveEpisodeIDs: Set<String>)
 }
 
@@ -13,6 +21,7 @@ nonisolated final class UserDefaultsNotificationEpisodeStore: NotificationEpisod
     private let key: String
     private let capacity: Int
     private let lock = NSLock()
+    private var admittedEpisodeIDs: Set<String> = []
 
     init(
         defaults: UserDefaults = .standard,
@@ -30,12 +39,37 @@ nonisolated final class UserDefaultsNotificationEpisodeStore: NotificationEpisod
         lock.withLock { storedEpisodeIDs().contains(episodeID) }
     }
 
+    func admit(_ episodeID: String) -> NotificationEpisodeAdmission {
+        lock.withLock {
+            let episodeIDs = storedEpisodeIDs()
+            guard !episodeIDs.contains(episodeID),
+                  !admittedEpisodeIDs.contains(episodeID) else { return .alreadyTracked }
+            guard episodeIDs.count + admittedEpisodeIDs.count < capacity else {
+                return .capacityReached
+            }
+            admittedEpisodeIDs.insert(episodeID)
+            return .admitted
+        }
+    }
+
     func record(_ episodeID: String) {
         lock.withLock {
-            var episodeIDs = storedEpisodeIDs().filter { $0 != episodeID }
+            precondition(
+                admittedEpisodeIDs.remove(episodeID) != nil,
+                "A notification episode must be admitted before it is recorded"
+            )
+            var episodeIDs = storedEpisodeIDs()
+            precondition(
+                episodeIDs.count < capacity,
+                "An admitted notification episode must have durable ledger capacity"
+            )
             episodeIDs.append(episodeID)
             persist(episodeIDs)
         }
+    }
+
+    func abandon(_ episodeID: String) {
+        _ = lock.withLock { admittedEpisodeIDs.remove(episodeID) }
     }
 
     func reconcile(authoritativeActiveEpisodeIDs: Set<String>) {
@@ -47,22 +81,31 @@ nonisolated final class UserDefaultsNotificationEpisodeStore: NotificationEpisod
     private func normalizePersistedEpisodes() {
         lock.withLock {
             let episodeIDs = storedEpisodeIDs()
-            let normalizedEpisodeIDs = boundedUniqueEpisodeIDs(episodeIDs)
+            // Older builds had no bound, so normalize once at startup by
+            // retaining the newest successful identities. Runtime admission
+            // never evicts a recorded identity after this migration.
+            let normalizedEpisodeIDs = Array(
+                mostRecentUniqueEpisodeIDs(episodeIDs).suffix(capacity)
+            )
             guard normalizedEpisodeIDs != episodeIDs else { return }
             defaults.set(normalizedEpisodeIDs, forKey: key)
         }
     }
 
     private func persist(_ episodeIDs: [String]) {
-        defaults.set(boundedUniqueEpisodeIDs(episodeIDs), forKey: key)
+        let uniqueEpisodeIDs = mostRecentUniqueEpisodeIDs(episodeIDs)
+        precondition(
+            uniqueEpisodeIDs.count <= capacity,
+            "Runtime notification persistence must never evict a successful identity"
+        )
+        defaults.set(uniqueEpisodeIDs, forKey: key)
     }
 
-    private func boundedUniqueEpisodeIDs(_ episodeIDs: [String]) -> [String] {
+    private func mostRecentUniqueEpisodeIDs(_ episodeIDs: [String]) -> [String] {
         var seen: Set<String> = []
-        let mostRecentUniqueEpisodeIDs = episodeIDs.reversed().filter {
+        return episodeIDs.reversed().filter {
             seen.insert($0).inserted
         }.reversed()
-        return Array(mostRecentUniqueEpisodeIDs.suffix(capacity))
     }
 
     private func storedEpisodeIDs() -> [String] {
