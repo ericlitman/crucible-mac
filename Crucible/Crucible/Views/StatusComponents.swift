@@ -62,7 +62,7 @@ struct FleetConditionRow: View {
                         .foregroundStyle(.secondary)
                 }
                 if let actual = condition.actual, let bound = condition.bound {
-                    Text("Observed \(actual.formatted()) · bound \(bound.formatted())")
+                    Text("Observed \(condition.formattedMeasure(actual)) · bound \(condition.formattedMeasure(bound))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -75,7 +75,18 @@ struct FleetConditionRow: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(condition.severity.rawValue), \(condition.title), \(condition.affectedLabel)")
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        var parts = [condition.severity.rawValue, condition.title, condition.affectedLabel]
+        if let actual = condition.actual, let bound = condition.bound {
+            parts.append("observed \(condition.formattedMeasure(actual)), bound \(condition.formattedMeasure(bound))")
+        }
+        if !compact, let action = condition.action {
+            parts.append(action)
+        }
+        return parts.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
@@ -112,7 +123,7 @@ struct FreshnessView: View {
                 }
 
                 if !presentation.freshness.isCurrent, let lastSuccess = presentation.lastSuccessfulRefresh {
-                    Text("Last successful refresh \(lastSuccess.formatted(.relative(presentation: .named)))")
+                    Text("Last complete refresh \(lastSuccess.formatted(.relative(presentation: .named)))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -47,9 +47,9 @@ struct HostWorkView: View {
 
                 if host.jobs.isEmpty {
                     ContentUnavailableView(
-                        "No active work",
-                        systemImage: "checkmark.circle",
-                        description: Text("This host has no fixture jobs.")
+                        "No jobs in this snapshot",
+                        systemImage: "tray",
+                        description: Text("The current snapshot supplies no jobs for this host.")
                     )
                 }
             }
@@ -101,10 +101,12 @@ struct WorkHierarchyRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if subtitle != title {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
             Image(systemName: state.symbolName)

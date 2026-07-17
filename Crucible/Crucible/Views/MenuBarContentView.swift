@@ -1,8 +1,17 @@
 import SwiftUI
 
+enum MenuBarPanelMetrics {
+    /// Floor for the scrollable overview so transient measurement states never
+    /// collapse the panel body below a usable viewport.
+    static let minimumOverviewHeight: CGFloat = 120
+    /// Cap for the scrollable overview; content beyond this scrolls.
+    static let maximumOverviewHeight: CGFloat = 560
+}
+
 struct MenuBarContentView: View {
     let state: AppState
     @Environment(\.openWindow) private var openWindow
+    @State private var overviewContentHeight: CGFloat = MenuBarPanelMetrics.maximumOverviewHeight
 
     private let metricColumns = Array(repeating: GridItem(.flexible(), spacing: 7), count: 3)
 
@@ -101,10 +110,12 @@ struct MenuBarContentView: View {
                                         VStack(alignment: .leading, spacing: 1) {
                                             Text(item.id)
                                                 .font(.caption.weight(.semibold))
-                                            Text(item.title)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
+                                            if item.title != item.id {
+                                                Text(item.title)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
                                         }
                                         Spacer(minLength: 4)
                                         Text(item.state.title)
@@ -120,8 +131,17 @@ struct MenuBarContentView: View {
                     }
                 }
                 .padding(14)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { height in
+                    overviewContentHeight = height
+                }
             }
-            .frame(maxHeight: 560)
+            // Inside MenuBarExtra(.window) the panel sizes to the content's ideal
+            // height, and a ScrollView's ideal height is zero — an explicit height
+            // clamped to the measured content keeps the panel content-sized until
+            // it reaches the cap, then scrolls.
+            .frame(height: min(max(overviewContentHeight, MenuBarPanelMetrics.minimumOverviewHeight), MenuBarPanelMetrics.maximumOverviewHeight))
 
             Divider()
 
