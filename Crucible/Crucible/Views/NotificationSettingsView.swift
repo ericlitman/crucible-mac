@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NotificationSettingsView: View {
     let state: AppState
+    @Environment(\.scenePhase) private var scenePhase
 
     private let systemNotificationSettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
@@ -39,7 +40,12 @@ struct NotificationSettingsView: View {
 
             Section("Coverage") {
                 LabeledContent("Active alerts", value: "Important conditions")
-                Text("Crucible alerts once per CLI condition episode for stalls and soft or hard time and token limits.")
+                Text("Stall and soft or hard time-limit protection is active. Crucible alerts once per CLI condition episode.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LabeledContent("Token-limit alerts", value: "Waiting for CLI telemetry")
+                Text("Token-limit protection is unavailable until the Crucible CLI supplies authoritative token usage and boundary conditions.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -49,9 +55,13 @@ struct NotificationSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 330)
+        .frame(width: 480, height: 390)
         .task {
-            await state.refreshNotificationAuthorizationState()
+            await state.notificationSettingsDidBecomeActive()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task { await state.notificationSettingsDidBecomeActive() }
         }
     }
 

@@ -28,7 +28,17 @@ final class FleetNotificationCoordinator {
         try await client.requestAuthorization()
     }
 
-    func process(_ snapshot: FleetSnapshot) async -> FleetNotificationResult {
+    func process(
+        _ snapshot: FleetSnapshot,
+        isAuthoritativeComplete: Bool
+    ) async -> FleetNotificationResult {
+        let alerts = ImportantConditionAlertPlanner.alerts(for: snapshot)
+        if isAuthoritativeComplete {
+            episodeStore.reconcile(
+                authoritativeActiveEpisodeIDs: Set(snapshot.conditions.map(\.id))
+            )
+        }
+
         let authorizationState = await client.authorizationState()
         guard authorizationState == .authorized else {
             return FleetNotificationResult(
@@ -40,7 +50,7 @@ final class FleetNotificationCoordinator {
 
         var deliveredEpisodeIDs: [String] = []
         var deliveryErrors: [String] = []
-        for alert in ImportantConditionAlertPlanner.alerts(for: snapshot) {
+        for alert in alerts {
             guard !inFlightEpisodeIDs.contains(alert.episodeID),
                   !episodeStore.contains(alert.episodeID) else { continue }
             inFlightEpisodeIDs.insert(alert.episodeID)

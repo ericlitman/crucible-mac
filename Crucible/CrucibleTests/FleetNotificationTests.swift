@@ -135,8 +135,8 @@ struct FleetNotificationTests {
         #expect(state.notificationNavigationRequest?.route == route)
     }
 
-    @Test("Unavailable and partial notification targets remain explicit until a complete snapshot resolves them")
-    func unresolvedTargetIsPreserved() throws {
+    @Test("A partial snapshot routes an exact present target and preserves its incomplete-data warning")
+    func partialSnapshotRoutesPresentTarget() throws {
         let state = AppState(initialPresentation: .productionUnavailable)
         let route = FleetAlertRoute(
             conditionEpisodeID: "pending-route",
@@ -147,17 +147,12 @@ struct FleetNotificationTests {
             sourceTimestamp: Date(timeIntervalSince1970: 1_752_665_200)
         )
 
-        state.handleNotificationResponse(route)
-        #expect(state.selection == nil)
-        #expect(state.selectedHostID == nil)
-        #expect(state.unresolvedNotificationTarget?.route == route)
-        #expect(state.unresolvedNotificationTarget?.reason == .targetUnavailable)
-
         state.apply(try delivery(.incomplete, conditions: [condition(id: "partial-route")]))
-        #expect(state.selection == nil)
-        #expect(state.selectedHostID == nil)
-        #expect(state.unresolvedNotificationTarget?.route == route)
-        #expect(state.unresolvedNotificationTarget?.reason == .partialSnapshot)
+        state.handleNotificationResponse(route)
+        #expect(state.selection == .lane(jobID: "job-1", laneID: "implement"))
+        #expect(state.selectedHostID == "pro16")
+        #expect(state.unresolvedNotificationTarget == nil)
+        #expect(state.presentation.errorMessage?.contains("incomplete") == true)
 
         state.apply(try delivery(.healthy, conditions: [condition(id: "complete-route")]))
         #expect(state.selection == .lane(jobID: "job-1", laneID: "implement"))
@@ -186,6 +181,28 @@ struct FleetNotificationTests {
         ))
         #expect(state.selection == .host(hostID: "pro16"))
         #expect(state.unresolvedNotificationTarget == nil)
+    }
+
+    @Test("A genuinely absent notification target remains explicit under partial data")
+    func absentPartialTargetIsUnresolved() throws {
+        let state = AppState(initialPresentation: .productionUnavailable)
+        let route = FleetAlertRoute(
+            conditionEpisodeID: "absent-route",
+            conditionType: "no_progress_stall",
+            hostID: "studio2",
+            jobID: "missing-job",
+            laneID: "missing-lane",
+            sourceTimestamp: Date(timeIntervalSince1970: 1_752_665_200)
+        )
+
+        state.handleNotificationResponse(route)
+        state.apply(try delivery(.incomplete, conditions: [condition(id: "other-target")]))
+
+        #expect(state.selection == nil)
+        #expect(state.selectedHostID == nil)
+        #expect(state.unresolvedNotificationTarget?.route == route)
+        #expect(state.unresolvedNotificationTarget?.reason == .partialSnapshot)
+        #expect(state.presentation.errorMessage?.contains("incomplete") == true)
     }
 
     @Test("Planner refuses conditions that cannot identify host, job, and lane")
@@ -265,6 +282,35 @@ struct FleetNotificationTests {
         #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["pending"])
     }
 
+    @Test("Returning from System Settings refreshes permission, clears obsolete errors, and delivers active conditions")
+    func settingsActivationRefreshesAuthorization() async throws {
+        let client = FakeSystemNotificationClient(
+            authorizationState: .notDetermined,
+            authorizationRequestFailuresRemaining: 1
+        )
+        let coordinator = FleetNotificationCoordinator(
+            client: client,
+            episodeStore: MemoryNotificationEpisodeStore()
+        )
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: coordinator
+        )
+
+        state.apply(try delivery(.healthy, conditions: [condition(id: "settings-active")]))
+        await state.waitForNotificationEvaluation()
+        await state.requestNotificationAuthorization()
+        #expect(state.notificationAuthorizationState == .notDetermined)
+        #expect(state.notificationErrorMessage?.contains("permission") == true)
+
+        client.setAuthorizationState(.authorized)
+        await state.notificationSettingsDidBecomeActive()
+
+        #expect(state.notificationAuthorizationState == .authorized)
+        #expect(state.notificationErrorMessage == nil)
+        #expect(client.deliveredAlerts.map(\.episodeID) == ["settings-active"])
+    }
+
     @Test("A fresh partial snapshot is accepted for notifications")
     func freshPartialDelivers() async throws {
         let harness = notificationHarness(authorizationState: .authorized)
@@ -308,17 +354,55 @@ struct FleetNotificationTests {
         #expect(harness.client.deliveredAlerts.isEmpty)
     }
 
+    @Test("Partial, stale, error, and out-of-order snapshots never prune an active delivered episode")
+    func nonAuthoritativeSnapshotsDoNotPrune() async throws {
+        let harness = notificationHarness(authorizationState: .authorized)
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: harness.coordinator
+        )
+
+        state.apply(try delivery(.healthy, conditions: [condition(id: "retained")]))
+        await state.waitForNotificationEvaluation()
+        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["retained"])
+
+        state.apply(try delivery(.stale, conditions: []))
+        state.apply(try LiveFleetFixture.failed.delivery)
+        state.apply(try delivery(
+            .healthy,
+            conditions: [],
+            generatedAt: "2026-07-16T11:59:05.000Z",
+            sourceObservedAt: "2026-07-16T11:59:00.000Z"
+        ))
+        state.apply(try delivery(
+            .incomplete,
+            conditions: [condition(id: "retained")],
+            generatedAt: "2026-07-16T12:02:05.000Z",
+            sourceObservedAt: "2026-07-16T12:02:00.000Z"
+        ))
+        await state.waitForNotificationEvaluation()
+
+        #expect(harness.store.contains("retained"))
+        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["retained"])
+    }
+
     @Test("Denial and scheduling failures do not consume an episode")
     func denialAndFailureRetry() async {
         let deniedHarness = notificationHarness(authorizationState: .denied)
         let active = snapshot(conditions: [condition(id: "denied")])
 
-        let deniedResult = await deniedHarness.coordinator.process(active)
+        let deniedResult = await deniedHarness.coordinator.process(
+            active,
+            isAuthoritativeComplete: true
+        )
         #expect(deniedResult.authorizationState == .denied)
         #expect(!deniedHarness.store.contains("denied"))
 
         deniedHarness.client.setAuthorizationState(.authorized)
-        let authorizedResult = await deniedHarness.coordinator.process(active)
+        let authorizedResult = await deniedHarness.coordinator.process(
+            active,
+            isAuthoritativeComplete: true
+        )
         #expect(authorizedResult.deliveredEpisodeIDs == ["denied"])
         #expect(deniedHarness.store.contains("denied"))
 
@@ -327,11 +411,17 @@ struct FleetNotificationTests {
             deliveryFailuresRemaining: 1
         )
         let retrySnapshot = snapshot(conditions: [condition(id: "retry")])
-        let failedResult = await failingHarness.coordinator.process(retrySnapshot)
+        let failedResult = await failingHarness.coordinator.process(
+            retrySnapshot,
+            isAuthoritativeComplete: true
+        )
         #expect(failedResult.deliveryErrors.count == 1)
         #expect(!failingHarness.store.contains("retry"))
 
-        let retriedResult = await failingHarness.coordinator.process(retrySnapshot)
+        let retriedResult = await failingHarness.coordinator.process(
+            retrySnapshot,
+            isAuthoritativeComplete: true
+        )
         #expect(retriedResult.deliveredEpisodeIDs == ["retry"])
         #expect(failingHarness.client.deliveryAttemptCount == 2)
         #expect(failingHarness.store.contains("retry"))
@@ -342,28 +432,48 @@ struct FleetNotificationTests {
         let harness = notificationHarness(authorizationState: .authorized)
         let active = snapshot(conditions: [condition(id: "same-episode")])
 
-        _ = await harness.coordinator.process(active)
-        _ = await harness.coordinator.process(active)
+        _ = await harness.coordinator.process(active, isAuthoritativeComplete: true)
+        _ = await harness.coordinator.process(active, isAuthoritativeComplete: true)
 
         #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["same-episode"])
     }
 
-    @Test("UserDefaults delivery history persists and remains bounded")
-    func persistenceIsBounded() async {
+    @Test("More than 256 active episodes remain deduplicated until a complete snapshot prunes inactive identities")
+    func persistenceFollowsAuthoritativeLifecycle() async {
         let suiteName = "CrucibleTests.Notifications.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let key = "episodes"
+        let store = UserDefaultsNotificationEpisodeStore(defaults: defaults, key: key)
+        let client = FakeSystemNotificationClient(authorizationState: .authorized)
+        let coordinator = FleetNotificationCoordinator(client: client, episodeStore: store)
+        let allConditions = (0..<300).map { condition(id: "episode-\($0)") }
+        let survivingConditions = Array(allConditions.suffix(20))
 
-        let firstStore = UserDefaultsNotificationEpisodeStore(defaults: defaults, key: key, limit: 2)
-        firstStore.record("one")
-        firstStore.record("two")
-        firstStore.record("three")
+        _ = await coordinator.process(
+            snapshot(conditions: allConditions),
+            isAuthoritativeComplete: true
+        )
+        _ = await coordinator.process(
+            snapshot(conditions: allConditions),
+            isAuthoritativeComplete: true
+        )
+        #expect(client.deliveredAlerts.count == 300)
 
-        let relaunchedStore = UserDefaultsNotificationEpisodeStore(defaults: defaults, key: key, limit: 2)
-        #expect(!relaunchedStore.contains("one"))
-        #expect(relaunchedStore.contains("two"))
-        #expect(relaunchedStore.contains("three"))
+        _ = await coordinator.process(
+            snapshot(conditions: survivingConditions),
+            isAuthoritativeComplete: false
+        )
+        #expect(store.contains("episode-0"))
+        #expect(client.deliveredAlerts.count == 300)
+
+        _ = await coordinator.process(
+            snapshot(conditions: survivingConditions),
+            isAuthoritativeComplete: true
+        )
+        #expect(!store.contains("episode-0"))
+        #expect(store.contains("episode-299"))
+        #expect(defaults.stringArray(forKey: key)?.count == 20)
     }
 
     private func notificationHarness(
@@ -509,11 +619,12 @@ private struct NotificationHarness {
 }
 
 nonisolated private final class FakeSystemNotificationClient: SystemNotificationClient, @unchecked Sendable {
-    enum FakeError: Error { case deliveryFailed }
+    enum FakeError: Error { case deliveryFailed, authorizationRequestFailed }
 
     private let lock = NSLock()
     private var currentAuthorizationState: NotificationAuthorizationState
     private var deliveryFailuresRemaining: Int
+    private var authorizationRequestFailuresRemaining: Int
     private var storedRequestCount = 0
     private var storedDeliveryAttemptCount = 0
     private var storedDeliveredAlerts: [FleetAlert] = []
@@ -524,10 +635,12 @@ nonisolated private final class FakeSystemNotificationClient: SystemNotification
 
     init(
         authorizationState: NotificationAuthorizationState,
-        deliveryFailuresRemaining: Int = 0
+        deliveryFailuresRemaining: Int = 0,
+        authorizationRequestFailuresRemaining: Int = 0
     ) {
         currentAuthorizationState = authorizationState
         self.deliveryFailuresRemaining = deliveryFailuresRemaining
+        self.authorizationRequestFailuresRemaining = authorizationRequestFailuresRemaining
     }
 
     func authorizationState() async -> NotificationAuthorizationState {
@@ -535,8 +648,12 @@ nonisolated private final class FakeSystemNotificationClient: SystemNotification
     }
 
     func requestAuthorization() async throws -> NotificationAuthorizationState {
-        lock.withLock {
+        try lock.withLock {
             storedRequestCount += 1
+            if authorizationRequestFailuresRemaining > 0 {
+                authorizationRequestFailuresRemaining -= 1
+                throw FakeError.authorizationRequestFailed
+            }
             if currentAuthorizationState == .notDetermined {
                 currentAuthorizationState = .authorized
             }
@@ -574,5 +691,9 @@ nonisolated private final class MemoryNotificationEpisodeStore: NotificationEpis
 
     func record(_ episodeID: String) {
         _ = lock.withLock { episodeIDs.insert(episodeID) }
+    }
+
+    func reconcile(authoritativeActiveEpisodeIDs: Set<String>) {
+        lock.withLock { episodeIDs.formIntersection(authoritativeActiveEpisodeIDs) }
     }
 }

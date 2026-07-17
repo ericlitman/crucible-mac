@@ -21,6 +21,7 @@ final class AppState {
     private var notificationTask: Task<Void, Never>?
     private var pollingStarted = false
     private var lastAcceptedFreshSnapshotForNotifications: FleetSnapshot?
+    private var lastAcceptedFreshSnapshotIsAuthoritativeComplete = false
     private var currentSnapshotIsPartial = false
     private var activeNotificationTargetRoute: FleetAlertRoute?
 
@@ -164,7 +165,12 @@ final class AppState {
         reconcileSelection()
         if let snapshot = reduction.acceptedFreshSnapshot {
             lastAcceptedFreshSnapshotForNotifications = snapshot
-            scheduleNotifications(for: snapshot)
+            let isAuthoritativeComplete = reduction.acceptedFreshSnapshotIsPartial == false
+            lastAcceptedFreshSnapshotIsAuthoritativeComplete = isAuthoritativeComplete
+            scheduleNotifications(
+                for: snapshot,
+                isAuthoritativeComplete: isAuthoritativeComplete
+            )
         }
     }
 
@@ -173,15 +179,18 @@ final class AppState {
         notificationAuthorizationState = await notificationCoordinator.authorizationState()
     }
 
+    func notificationSettingsDidBecomeActive() async {
+        notificationErrorMessage = nil
+        await refreshNotificationAuthorizationState()
+        await deliverLastAcceptedSnapshotIfAuthorized()
+    }
+
     func requestNotificationAuthorization() async {
         guard let notificationCoordinator else { return }
         notificationErrorMessage = nil
         do {
             notificationAuthorizationState = try await notificationCoordinator.requestAuthorization()
-            guard notificationAuthorizationState == .authorized,
-                  let snapshot = lastAcceptedFreshSnapshotForNotifications else { return }
-            await notificationTask?.value
-            applyNotificationResult(await notificationCoordinator.process(snapshot))
+            await deliverLastAcceptedSnapshotIfAuthorized()
         } catch {
             notificationErrorMessage = "Notification permission could not be updated: \(error.localizedDescription)"
             await refreshNotificationAuthorizationState()
@@ -214,14 +223,31 @@ final class AppState {
         Task { @MainActor [weak self] in await self?.refreshNow() }
     }
 
-    private func scheduleNotifications(for snapshot: FleetSnapshot) {
+    private func scheduleNotifications(
+        for snapshot: FleetSnapshot,
+        isAuthoritativeComplete: Bool
+    ) {
         guard let notificationCoordinator else { return }
         let precedingTask = notificationTask
         notificationTask = Task { @MainActor [weak self] in
             await precedingTask?.value
             guard let self else { return }
-            self.applyNotificationResult(await notificationCoordinator.process(snapshot))
+            self.applyNotificationResult(await notificationCoordinator.process(
+                snapshot,
+                isAuthoritativeComplete: isAuthoritativeComplete
+            ))
         }
+    }
+
+    private func deliverLastAcceptedSnapshotIfAuthorized() async {
+        guard notificationAuthorizationState == .authorized,
+              let notificationCoordinator,
+              let snapshot = lastAcceptedFreshSnapshotForNotifications else { return }
+        await notificationTask?.value
+        applyNotificationResult(await notificationCoordinator.process(
+            snapshot,
+            isAuthoritativeComplete: lastAcceptedFreshSnapshotIsAuthoritativeComplete
+        ))
     }
 
     private func applyNotificationResult(_ result: FleetNotificationResult) {
@@ -233,8 +259,7 @@ final class AppState {
 
     private func resolveNotificationTarget(_ route: FleetAlertRoute) {
         let exactSelection = FleetSelection.lane(jobID: route.jobID, laneID: route.laneID)
-        guard !currentSnapshotIsPartial,
-              snapshot?.job(id: route.jobID)?.hostID == route.hostID,
+        guard snapshot?.job(id: route.jobID)?.hostID == route.hostID,
               snapshot?.detail(for: exactSelection) != nil else {
             selection = nil
             unresolvedNotificationTarget = UnresolvedNotificationTarget(
