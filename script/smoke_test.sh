@@ -42,10 +42,13 @@ echo "Smoke launch verified: $APP_NAME pid=$PID"
 # check). Requires Accessibility permission for the invoking terminal;
 # set CRUCIBLE_SMOKE_SKIP_PANEL=1 only where that permission cannot exist.
 if [[ "${CRUCIBLE_SMOKE_SKIP_PANEL:-0}" != "1" ]]; then
-  SCREEN_LOCKED="$(python3 -c 'import Quartz; d = Quartz.CGSessionCopyCurrentDictionary() or {}; print(1 if d.get("CGSSessionScreenIsLocked", False) else 0)' 2>/dev/null || echo 0)"
+  SCREEN_LOCKED="$(python3 -c 'import Quartz; d = Quartz.CGSessionCopyCurrentDictionary() or {}; print(1 if d.get("CGSSessionScreenIsLocked", False) else 0)' 2>/dev/null || echo unknown)"
   if [[ "$SCREEN_LOCKED" == "1" ]]; then
     echo "Smoke test failed: screen is locked, so the status-item panel cannot be exercised; unlock the session and rerun" >&2
     exit 1
+  fi
+  if [[ "$SCREEN_LOCKED" == "unknown" ]]; then
+    echo "Smoke warning: screen-lock probe unavailable (python3 Quartz missing); a locked session will surface as a panel-probe failure below" >&2
   fi
   sleep 4
   PANEL_GEOMETRY="$(osascript <<'EOF' 2>&1 || true
