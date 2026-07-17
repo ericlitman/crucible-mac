@@ -47,9 +47,9 @@ struct HostWorkView: View {
 
                 if host.jobs.isEmpty {
                     ContentUnavailableView(
-                        "No active work",
-                        systemImage: "checkmark.circle",
-                        description: Text("This host has no fixture jobs.")
+                        "No jobs in this snapshot",
+                        systemImage: "tray",
+                        description: Text("The current snapshot supplies no jobs for this host.")
                     )
                 }
             }

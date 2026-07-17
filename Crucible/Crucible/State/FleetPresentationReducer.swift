@@ -91,7 +91,7 @@ struct FleetPresentationReducer {
         return FleetPresentationReduction(
             presentation: FleetPresentation(
                 snapshot: incoming,
-                freshness: .stale(asOf: incoming.sourceTimestamp),
+                freshness: .incomplete(asOf: incoming.sourceTimestamp),
                 lastSuccessfulRefresh: current.lastSuccessfulRefresh,
                 errorMessage: incompleteMessage(contract.completeness.reasons),
                 isPreviewData: false

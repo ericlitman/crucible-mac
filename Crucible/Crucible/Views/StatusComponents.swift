@@ -112,7 +112,7 @@ struct FreshnessView: View {
                 }
 
                 if !presentation.freshness.isCurrent, let lastSuccess = presentation.lastSuccessfulRefresh {
-                    Text("Last successful refresh \(lastSuccess.formatted(.relative(presentation: .named)))")
+                    Text("Last complete refresh \(lastSuccess.formatted(.relative(presentation: .named)))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

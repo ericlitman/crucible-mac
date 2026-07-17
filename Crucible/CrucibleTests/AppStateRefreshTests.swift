@@ -33,7 +33,7 @@ struct AppStateRefreshTests {
         #expect(state.presentation.errorMessage == nil)
     }
 
-    @Test("Fresh partial delivery replaces an equally recent complete snapshot while remaining stale")
+    @Test("Fresh partial delivery replaces an equally recent complete snapshot while labeled incomplete")
     func incompleteReplacesEquallyRecentComplete() throws {
         let state = AppState(initialPresentation: .productionUnavailable)
         guard case let .snapshot(healthy) = try LiveFleetFixture.healthy.delivery,
@@ -44,7 +44,7 @@ struct AppStateRefreshTests {
         state.apply(.snapshot(incomplete))
 
         #expect(state.snapshot?.hosts.map(\.id) == ["pro16", "studio1"])
-        #expect(state.presentation.freshness == .stale(asOf: incomplete.sourceObservedAt!))
+        #expect(state.presentation.freshness == .incomplete(asOf: incomplete.sourceObservedAt!))
         #expect(state.presentation.lastSuccessfulRefresh == lastSuccess)
         #expect(state.presentation.errorMessage?.contains("showing the newest available partial snapshot") == true)
         #expect(state.presentation.errorMessage?.contains("host_unavailable:studio1") == true)
@@ -70,7 +70,7 @@ struct AppStateRefreshTests {
         state.apply(.snapshot(newer))
 
         #expect(state.snapshot?.hosts.map(\.id) == ["pro16", "studio2"])
-        #expect(state.presentation.freshness == .stale(asOf: newer.sourceObservedAt!))
+        #expect(state.presentation.freshness == .incomplete(asOf: newer.sourceObservedAt!))
         #expect(state.presentation.errorMessage?.contains("showing the newest available partial snapshot") == true)
         #expect(state.presentation.errorMessage?.contains("host_unavailable:studio2") == true)
         let newerPresentation = state.presentation
@@ -111,7 +111,7 @@ struct AppStateRefreshTests {
         state.apply(.snapshot(olderComplete))
 
         #expect(state.presentation == partialPresentation)
-        #expect(state.presentation.freshness == .stale(asOf: newerIncomplete.sourceObservedAt!))
+        #expect(state.presentation.freshness == .incomplete(asOf: newerIncomplete.sourceObservedAt!))
     }
 
     @Test("Stale and error deliveries preserve the newest usable partial snapshot")
@@ -145,7 +145,7 @@ struct AppStateRefreshTests {
         #expect(state.presentation.errorMessage?.contains("invalid JSON") == true)
     }
 
-    @Test("Fresh partial delivery remains visible as stale when no complete snapshot exists")
+    @Test("Fresh partial delivery is labeled incomplete when no complete snapshot exists")
     func incompleteWithoutPriorState() throws {
         let state = AppState(initialPresentation: .productionUnavailable)
         guard case let .snapshot(incomplete) = try LiveFleetFixture.incomplete.delivery else { return }
@@ -153,7 +153,7 @@ struct AppStateRefreshTests {
         state.apply(.snapshot(incomplete))
 
         #expect(state.snapshot?.hosts.map(\.id) == ["pro16", "studio1"])
-        #expect(state.presentation.freshness == .stale(asOf: incomplete.sourceObservedAt!))
+        #expect(state.presentation.freshness == .incomplete(asOf: incomplete.sourceObservedAt!))
         #expect(state.presentation.lastSuccessfulRefresh == nil)
     }
 
@@ -260,8 +260,16 @@ struct AppStateRefreshTests {
         state.startPolling()
         state.menuBarDidAppear()
         state.dashboardDidAppear()
-        try await Task.sleep(for: .milliseconds(200))
 
+        var observed = 0
+        for _ in 0..<100 where observed < 1 {
+            observed = await client.callCount()
+            if observed >= 1 { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(observed == 1)
+
+        try await Task.sleep(for: .milliseconds(300))
         #expect(await client.callCount() == 1)
         state.stopPolling()
     }
