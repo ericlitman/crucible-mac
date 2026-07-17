@@ -8,7 +8,7 @@ struct FleetNotificationTests {
     @Test("Important condition planner covers every required CLI condition with actionable identity and copy")
     func requiredConditionCopy() throws {
         let conditions = [
-            condition(id: "stall", type: "no_progress_stall", actual: 720, bound: 600),
+            condition(id: "stall", type: "stalled", actual: 720, bound: 600),
             condition(id: "time-soft", type: "time_soft_bound_exceeded", actual: 1_500, bound: 1_260),
             condition(id: "time-hard", type: "time_hard_bound_exceeded", actual: 3_603, bound: 3_600),
             condition(id: "token-soft", type: "token_soft_bound_exceeded", actual: 205_000, bound: 200_000),
@@ -30,8 +30,33 @@ struct FleetNotificationTests {
         #expect(alerts[0].body == "Implementation (implementer): No meaningful progress for 12m; stall threshold is 10m. Source 2025-07-16T11:26:40Z.")
         #expect(alerts[2].body == "Implementation (implementer): Running for 1h 0m; hard limit is 1h 0m. Source 2025-07-16T11:26:40Z.")
         #expect(alerts[3].body == "Implementation (implementer): Used 205.0K tokens; soft limit is 200.0K. Source 2025-07-16T11:26:40Z.")
-        #expect(alerts[0].conditionType == "no_progress_stall")
+        #expect(alerts[0].conditionType == "stalled")
         #expect(alerts[0].sourceTimestamp == snapshot(conditions: []).sourceTimestamp)
+    }
+
+    @Test("Production stalled condition plans and delivers actual and bound context")
+    func productionStalledConditionDelivers() async throws {
+        let harness = notificationHarness(authorizationState: .authorized)
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: harness.coordinator
+        )
+        let productionCondition = condition(
+            id: "CRUMAC-10:implement:stalled",
+            type: "stalled",
+            actual: 1_425,
+            bound: 600
+        )
+
+        state.apply(try delivery(.healthy, conditions: [productionCondition]))
+        await state.waitForNotificationEvaluation()
+
+        let alert = try #require(harness.client.deliveredAlerts.first)
+        #expect(alert.conditionType == "stalled")
+        #expect(alert.title == "Lane stalled · job-1")
+        #expect(alert.subtitle == "Build fleet view · pro16")
+        #expect(alert.body == "Implementation (implement): No meaningful progress for 23m; stall threshold is 10m. Source 2026-07-16T12:00:00Z.")
+        #expect(harness.store.contains("CRUMAC-10:implement:stalled"))
     }
 
     @Test("Foreground notifications use visible and audible native presentation options")

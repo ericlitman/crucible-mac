@@ -91,7 +91,8 @@ nonisolated struct FleetAlertRoute: Equatable, Sendable {
 
 enum ImportantConditionAlertPlanner {
     private enum ConditionKind: String {
-        case noProgressStall = "no_progress_stall"
+        case stalled = "stalled"
+        case legacyNoProgressStall = "no_progress_stall"
         case softTime = "time_soft_bound_exceeded"
         case hardTime = "time_hard_bound_exceeded"
         case softToken = "token_soft_bound_exceeded"
@@ -132,7 +133,7 @@ enum ImportantConditionAlertPlanner {
 
     private static func title(for kind: ConditionKind) -> String {
         switch kind {
-        case .noProgressStall: "Lane stalled"
+        case .stalled, .legacyNoProgressStall: "Lane stalled"
         case .softTime: "Soft time limit exceeded"
         case .hardTime: "Hard time limit exceeded"
         case .softToken: "Soft token limit exceeded"
@@ -146,7 +147,7 @@ enum ImportantConditionAlertPlanner {
     ) -> String {
         let detail: String
         switch kind {
-        case .noProgressStall:
+        case .stalled, .legacyNoProgressStall:
             detail = durationDetail(
                 actual: condition.actual,
                 bound: condition.bound,
