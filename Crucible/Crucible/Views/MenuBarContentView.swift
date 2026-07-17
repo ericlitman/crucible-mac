@@ -125,15 +125,24 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            Button {
-                state.dashboardRequested()
-                openWindow(id: "fleet-dashboard")
-            } label: {
-                Label("Open Dashboard", systemImage: "rectangle.3.group")
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: 8) {
+                Button {
+                    state.dashboardRequested()
+                    openWindow(id: "fleet-dashboard")
+                } label: {
+                    Label("Open Dashboard", systemImage: "rectangle.3.group")
+                        .frame(maxWidth: .infinity)
+                }
+                .keyboardShortcut("o")
+
+                SettingsLink {
+                    Image(systemName: "bell.badge")
+                        .frame(width: 24)
+                        .accessibilityLabel("Notification Settings")
+                }
+                .help("Notification Settings")
             }
             .buttonStyle(.borderless)
-            .keyboardShortcut("o")
             .padding(10)
         }
         .frame(width: 370)

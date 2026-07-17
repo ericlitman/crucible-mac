@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -27,20 +28,28 @@ private struct CrucibleRuntimeApp: App {
     init() {
         let presentation = PreviewHarness.initialPresentation()
         let coordinator = presentation.isPreviewData ? nil : FleetRefreshCoordinator(client: ProcessCrucibleCLIClient())
-        _state = State(initialValue: AppState(
+        let notificationClient = UserNotificationClient()
+        let notificationCoordinator = FleetNotificationCoordinator(
+            client: notificationClient,
+            episodeStore: UserDefaultsNotificationEpisodeStore()
+        )
+        let appState = AppState(
             initialPresentation: presentation,
             refreshCoordinator: coordinator,
+            notificationCoordinator: notificationCoordinator,
             automaticallyStarts: coordinator != nil
-        ))
+        )
+        notificationClient.setResponseHandler { [weak appState] route in
+            appState?.handleNotificationResponse(route)
+        }
+        _state = State(initialValue: appState)
     }
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarContentView(state: state)
         } label: {
-            Image("MenuBarIcon")
-                .renderingMode(.template)
-                .accessibilityLabel("Crucible")
+            NotificationRoutingMenuBarLabel(state: state)
         }
         .menuBarExtraStyle(.window)
 
@@ -49,6 +58,26 @@ private struct CrucibleRuntimeApp: App {
         }
         .defaultSize(width: 940, height: 620)
         .windowResizability(.contentMinSize)
+
+        Settings {
+            NotificationSettingsView(state: state)
+        }
+    }
+}
+
+private struct NotificationRoutingMenuBarLabel: View {
+    let state: AppState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Image("MenuBarIcon")
+            .renderingMode(.template)
+            .accessibilityLabel("Crucible")
+            .onChange(of: state.notificationNavigationRequest?.id) { _, requestID in
+                guard requestID != nil else { return }
+                openWindow(id: "fleet-dashboard")
+                NSApp.activate(ignoringOtherApps: true)
+            }
     }
 }
 

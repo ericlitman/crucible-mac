@@ -1,5 +1,11 @@
 import Foundation
 
+struct FleetPresentationReduction {
+    let presentation: FleetPresentation
+    let acceptedFreshSnapshot: FleetSnapshot?
+    let acceptedFreshSnapshotIsPartial: Bool?
+}
+
 @MainActor
 struct FleetPresentationReducer {
     private var lastCompleteSnapshot: FleetSnapshot?
@@ -15,10 +21,14 @@ struct FleetPresentationReducer {
     mutating func reduce(
         _ delivery: LiveFleetDelivery,
         current: FleetPresentation
-    ) -> FleetPresentation {
+    ) -> FleetPresentationReduction {
         switch delivery {
         case let .snapshot(contract): reduce(contract, current: current)
-        case let .error(envelope): reduce(envelope, current: current)
+        case let .error(envelope): FleetPresentationReduction(
+            presentation: reduce(envelope, current: current),
+            acceptedFreshSnapshot: nil,
+            acceptedFreshSnapshotIsPartial: nil
+        )
         }
     }
 
@@ -36,42 +46,58 @@ struct FleetPresentationReducer {
     private mutating func reduce(
         _ contract: LiveFleetSnapshotV1,
         current: FleetPresentation
-    ) -> FleetPresentation {
+    ) -> FleetPresentationReduction {
         let incoming = contract.presentationSnapshot()
         let prior = current.snapshot ?? lastCompleteSnapshot
 
         if let prior, prior.sourceTimestamp > incoming.sourceTimestamp {
-            return current
+            return FleetPresentationReduction(
+                presentation: current,
+                acceptedFreshSnapshot: nil,
+                acceptedFreshSnapshotIsPartial: nil
+            )
         }
 
         if contract.freshness.state == .fresh, contract.completeness.state == .complete {
             lastCompleteSnapshot = incoming
-            return FleetPresentation(
-                snapshot: incoming,
-                freshness: .live(asOf: incoming.sourceTimestamp),
-                lastSuccessfulRefresh: contract.generatedAt,
-                errorMessage: nil,
-                isPreviewData: false
+            return FleetPresentationReduction(
+                presentation: FleetPresentation(
+                    snapshot: incoming,
+                    freshness: .live(asOf: incoming.sourceTimestamp),
+                    lastSuccessfulRefresh: contract.generatedAt,
+                    errorMessage: nil,
+                    isPreviewData: false
+                ),
+                acceptedFreshSnapshot: incoming,
+                acceptedFreshSnapshotIsPartial: false
             )
         }
 
         if contract.freshness.state == .stale {
             let retained = current.snapshot ?? lastCompleteSnapshot ?? incoming
-            return FleetPresentation(
-                snapshot: retained,
-                freshness: .stale(asOf: retained.sourceTimestamp),
-                lastSuccessfulRefresh: current.lastSuccessfulRefresh,
-                errorMessage: staleMessage(contract),
-                isPreviewData: false
+            return FleetPresentationReduction(
+                presentation: FleetPresentation(
+                    snapshot: retained,
+                    freshness: .stale(asOf: retained.sourceTimestamp),
+                    lastSuccessfulRefresh: current.lastSuccessfulRefresh,
+                    errorMessage: staleMessage(contract),
+                    isPreviewData: false
+                ),
+                acceptedFreshSnapshot: nil,
+                acceptedFreshSnapshotIsPartial: nil
             )
         }
 
-        return FleetPresentation(
-            snapshot: incoming,
-            freshness: .stale(asOf: incoming.sourceTimestamp),
-            lastSuccessfulRefresh: current.lastSuccessfulRefresh,
-            errorMessage: incompleteMessage(contract.completeness.reasons),
-            isPreviewData: false
+        return FleetPresentationReduction(
+            presentation: FleetPresentation(
+                snapshot: incoming,
+                freshness: .stale(asOf: incoming.sourceTimestamp),
+                lastSuccessfulRefresh: current.lastSuccessfulRefresh,
+                errorMessage: incompleteMessage(contract.completeness.reasons),
+                isPreviewData: false
+            ),
+            acceptedFreshSnapshot: incoming,
+            acceptedFreshSnapshotIsPartial: true
         )
     }
 

@@ -6,6 +6,7 @@ enum AppTelemetry {
     private static let lifecycle = Logger(subsystem: subsystem, category: "Lifecycle")
     private static let menuBar = Logger(subsystem: subsystem, category: "MenuBar")
     private static let dashboard = Logger(subsystem: subsystem, category: "Dashboard")
+    private static let notifications = Logger(subsystem: subsystem, category: "Notifications")
 
     static func launched(previewData: Bool) {
         lifecycle.info("App launched; previewData=\(previewData, privacy: .public)")
@@ -25,5 +26,17 @@ enum AppTelemetry {
 
     static func selected(kind: String, identifier: String) {
         dashboard.info("Selected \(kind, privacy: .public): \(identifier, privacy: .public)")
+    }
+
+    static func evaluatedNotifications(authorization: String, candidates: Int) {
+        notifications.info(
+            "Evaluated important conditions; authorization=\(authorization, privacy: .public), candidates=\(candidates, privacy: .public)"
+        )
+    }
+
+    static func completedNotificationDelivery(delivered: Int, errors: Int) {
+        notifications.info(
+            "Completed important-condition delivery; delivered=\(delivered, privacy: .public), errors=\(errors, privacy: .public)"
+        )
     }
 }

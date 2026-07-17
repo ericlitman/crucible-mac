@@ -1,0 +1,128 @@
+{
+  "agent_run_format_version": "0.1",
+  "run_id": "crumac-8-important-notifications",
+  "agent": {
+    "name": "Codex",
+    "version": "GPT-5"
+  },
+  "product_spec": {
+    "path": "docs/product-specs/live-fleet-observability.product-spec.md",
+    "spec_revision": 5,
+    "content_hash": "sha256:053aa1d21af0f4b579429e00e6cc457c492c38345f486538d4981e075da2dd61"
+  },
+  "started_at": "2026-07-17T04:33:40.377Z",
+  "completed_at": "2026-07-17T04:47:46Z",
+  "status": "completed",
+  "checked_items": [
+    {
+      "item_id": "AC-1",
+      "status": "not_checked",
+      "notes": "The notification slice consumes the existing CLI-only presentation state and introduces no new fleet transport. The broader criterion was established by the prior CRUMAC-5/7 Agent Run and was not re-claimed here."
+    },
+    {
+      "item_id": "AC-2",
+      "status": "not_checked",
+      "notes": "Actual status-item inventory and information presentation are intentionally deferred to the CRUMAC-7 redesign and its mandatory post-MOB-1325 reacceptance pass."
+    },
+    {
+      "item_id": "AC-3",
+      "status": "not_checked",
+      "notes": "This slice routes a notification to the affected identity but does not claim the complete operator-detail contract. Token provenance and additional lifecycle facts remain dependent on CRUMAC-10, CRUMAC-16, and MOB-1325."
+    },
+    {
+      "item_id": "AC-4",
+      "status": "not_checked",
+      "notes": "Polling policy was not changed or re-claimed by this slice."
+    },
+    {
+      "item_id": "AC-5",
+      "status": "not_checked",
+      "evidence": [
+        {
+          "type": "linear_issue",
+          "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-8/add-trustworthy-macos-notifications-with-important-and-all-major-modes",
+          "title": "Important-condition notification implementation and runtime proof"
+        },
+        {
+          "type": "other",
+          "url": "https://uploads.linear.app/0018d892-6de0-4de2-ab88-02e710ae1e2b/978bd39d-1575-4c69-9ec5-e4a157856121/3e3d3426-3ecb-4df6-845b-db3148715254",
+          "title": "Delivered macOS time-bound notifications"
+        }
+      ],
+      "notes": "Stall and time-bound conditions are identified from stable CLI episode identities, made immediately eligible, and delivered once when scheduling succeeds. Live token-bound delivery cannot be claimed until CRUMAC-10 supplies authoritative attempt-bound token conditions, so the full criterion remains not checked."
+    },
+    {
+      "item_id": "AC-6",
+      "status": "not_checked",
+      "notes": "Important-only mode, a deterministic 512-entry hard cap on the persisted successful-delivery ledger, capacity admission before system scheduling, no runtime eviction of successful identities, and unchanged-episode deduplication are implemented. Overflow stays pending with an explicit retryable error until authoritative reconciliation frees capacity. A one-time migration of legacy over-capacity data retains the newest unique identities. All-major mode remains intentionally unavailable until CRUMAC-15 supplies the ordered replayable CLI event feed; snapshot differencing was not introduced."
+    },
+    {
+      "item_id": "AC-7",
+      "status": "not_checked",
+      "notes": "Notification activation preserves an affected identity and presents an explicit unavailable state when that identity is absent from the current partial snapshot. The broader partial-snapshot UI and stable-selection criterion remains assigned to the UI redesign."
+    },
+    {
+      "item_id": "AC-8",
+      "status": "not_checked",
+      "notes": "Artwork was not changed by this slice."
+    },
+    {
+      "item_id": "AC-9",
+      "status": "not_checked",
+      "notes": "Signing and Sparkle remain CRUMAC-9 follow-up work."
+    },
+    {
+      "item_id": "AC-10",
+      "status": "not_checked",
+      "evidence": [
+        {
+          "type": "other",
+          "url": "../../Crucible/CrucibleTests/FleetNotificationTests.swift",
+          "title": "Notification eligibility, authorization, retry, routing, and deduplication tests"
+        }
+      ],
+      "notes": "The exact head passes all 82 AppKit-free tests, including alert episode identity, bounded successful-delivery persistence, capacity-plus-one admission and eventual retry, authorization retry, scheduling failure, stale-evaluation supersession, and routing tests, plus a warnings-as-errors Release build. Packaged status-item viewport, scrolling, and teardown acceptance remains outstanding, so the full criterion is not claimed."
+    },
+    {
+      "item_id": "AC-11",
+      "status": "passed",
+      "evidence": [
+        {
+          "type": "linear_issue",
+          "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-8/add-trustworthy-macos-notifications-with-important-and-all-major-modes",
+          "title": "Authorization, delivery, and retry evidence"
+        },
+        {
+          "type": "other",
+          "url": "https://uploads.linear.app/0018d892-6de0-4de2-ab88-02e710ae1e2b/ecab0716-291d-4e78-a15c-ddbc540f87fc/1737762a-d9f0-4bac-92c4-2330c691ea17",
+          "title": "Contextual settings surface showing current authorization"
+        },
+        {
+          "type": "other",
+          "url": "https://uploads.linear.app/0018d892-6de0-4de2-ab88-02e710ae1e2b/978bd39d-1575-4c69-9ec5-e4a157856121/3e3d3426-3ecb-4df6-845b-db3148715254",
+          "title": "Successfully scheduled macOS notifications"
+        },
+        {
+          "type": "other",
+          "url": "https://uploads.linear.app/0018d892-6de0-4de2-ab88-02e710ae1e2b/20b70d61-7713-4ca6-ad46-c61e419890f1/267a3d97-cd93-4596-865f-a0dddf2b2290",
+          "title": "Notification activation routed to an explicit unavailable affected identity"
+        }
+      ],
+      "notes": "Permission is requested only from the contextual notification settings action; the app always displays current authorization, serializes concurrent authorization work, records only successful schedules, retries still-active episodes after authorization becomes available, and routes activation after completing the presentation mutation. Accepted notification snapshots carry a monotonic revision so a newer state supersedes an older evaluation across authorization and permission-recovery suspensions. Focused tests cover denied permission, scheduling failure, retry, concurrent requests, stale-snapshot races, bounded exact-once persistence, and the authorized-first-response regression confirmed by council review. Runtime proof covered authorized delivery and persistent deduplication."
+    },
+    {
+      "item_id": "AC-12",
+      "status": "not_checked",
+      "notes": "Light and dark notification-settings evidence exists, but the actual packaged status-item and dashboard accessibility contract is intentionally reserved for the UI acceptance work."
+    },
+    {
+      "item_id": "SM-1",
+      "status": "not_checked",
+      "notes": "Zero unnoticed stalls requires completion of live token alerts, all-major event replay, UI acceptance, launch, and a seven-day measurement window."
+    }
+  ],
+  "drift": {
+    "detected": false
+  },
+  "completion_claim": "This run completes only the trustworthy permission and important-condition delivery foundation of CRUMAC-8. It claims AC-11: contextual authorization, visible authorization state, no false delivered marks, retry after authorization, newer-snapshot supersession, bounded durable successful-delivery deduplication, and activation routing. It does not claim CRUMAC-8 complete: AC-5 still requires authoritative live token-bound conditions from CRUMAC-10, and AC-6 still requires CRUMAC-15's ordered replayable all-major event feed. The status-item and dashboard remain subject to the CRUMAC-7 redesign and mandatory post-MOB-1325 reacceptance."
+}

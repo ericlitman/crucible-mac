@@ -6,6 +6,26 @@ enum FleetSelection: Hashable, Sendable {
     case lane(jobID: String, laneID: String)
 }
 
+enum NotificationTargetUnavailableReason: Equatable, Sendable {
+    case partialSnapshot
+    case targetUnavailable
+}
+
+struct UnresolvedNotificationTarget: Equatable, Sendable {
+    let route: FleetAlertRoute
+    let reason: NotificationTargetUnavailableReason
+}
+
+struct NotificationNavigationRequest: Equatable, Sendable {
+    let id: UUID
+    let route: FleetAlertRoute
+
+    init(route: FleetAlertRoute) {
+        id = UUID()
+        self.route = route
+    }
+}
+
 struct FleetSelectionDetail: Equatable, Sendable {
     let eyebrow: String
     let title: String
