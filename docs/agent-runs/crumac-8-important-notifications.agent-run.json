@@ -54,7 +54,7 @@
     {
       "item_id": "AC-6",
       "status": "not_checked",
-      "notes": "Important-only mode, persistent successful-delivery identities, and unchanged-episode deduplication are implemented. All-major mode remains intentionally unavailable until CRUMAC-15 supplies the ordered replayable CLI event feed; snapshot differencing was not introduced."
+      "notes": "Important-only mode, a deterministic 512-entry hard cap on the persisted successful-delivery ledger, newest-identity retention, and unchanged-episode deduplication are implemented. All-major mode remains intentionally unavailable until CRUMAC-15 supplies the ordered replayable CLI event feed; snapshot differencing was not introduced."
     },
     {
       "item_id": "AC-7",
@@ -81,7 +81,7 @@
           "title": "Notification eligibility, authorization, retry, routing, and deduplication tests"
         }
       ],
-      "notes": "The exact head passes all 78 AppKit-free tests, including alert episode identity, successful-delivery persistence, authorization retry, scheduling failure, and routing tests, plus a warnings-as-errors Release build. Packaged status-item viewport, scrolling, and teardown acceptance remains outstanding, so the full criterion is not claimed."
+      "notes": "The exact head passes all 81 AppKit-free tests, including alert episode identity, bounded successful-delivery persistence, authorization retry, scheduling failure, stale-evaluation supersession, and routing tests, plus a warnings-as-errors Release build. Packaged status-item viewport, scrolling, and teardown acceptance remains outstanding, so the full criterion is not claimed."
     },
     {
       "item_id": "AC-11",
@@ -108,7 +108,7 @@
           "title": "Notification activation routed to an explicit unavailable affected identity"
         }
       ],
-      "notes": "Permission is requested only from the contextual notification settings action; the app always displays current authorization, serializes concurrent authorization work, records only successful schedules, retries still-active episodes after authorization becomes available, and routes activation after completing the presentation mutation. Focused tests cover denied permission, scheduling failure, retry, concurrent requests, stale-snapshot races, and exact once-per-episode persistence. Runtime proof covered authorized delivery and persistent deduplication."
+      "notes": "Permission is requested only from the contextual notification settings action; the app always displays current authorization, serializes concurrent authorization work, records only successful schedules, retries still-active episodes after authorization becomes available, and routes activation after completing the presentation mutation. Accepted notification snapshots carry a monotonic revision so a newer state supersedes an older evaluation across authorization and permission-recovery suspensions. Focused tests cover denied permission, scheduling failure, retry, concurrent requests, stale-snapshot races, bounded exact-once persistence, and the authorized-first-response regression confirmed by council review. Runtime proof covered authorized delivery and persistent deduplication."
     },
     {
       "item_id": "AC-12",
@@ -124,5 +124,5 @@
   "drift": {
     "detected": false
   },
-  "completion_claim": "This run completes only the trustworthy permission and important-condition delivery foundation of CRUMAC-8. It claims AC-11: contextual authorization, visible authorization state, no false delivered marks, retry after authorization, durable successful-delivery deduplication, and activation routing. It does not claim CRUMAC-8 complete: AC-5 still requires authoritative live token-bound conditions from CRUMAC-10, and AC-6 still requires CRUMAC-15's ordered replayable all-major event feed. The status-item and dashboard remain subject to the CRUMAC-7 redesign and mandatory post-MOB-1325 reacceptance."
+  "completion_claim": "This run completes only the trustworthy permission and important-condition delivery foundation of CRUMAC-8. It claims AC-11: contextual authorization, visible authorization state, no false delivered marks, retry after authorization, newer-snapshot supersession, bounded durable successful-delivery deduplication, and activation routing. It does not claim CRUMAC-8 complete: AC-5 still requires authoritative live token-bound conditions from CRUMAC-10, and AC-6 still requires CRUMAC-15's ordered replayable all-major event feed. The status-item and dashboard remain subject to the CRUMAC-7 redesign and mandatory post-MOB-1325 reacceptance."
 }
