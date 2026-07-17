@@ -3,7 +3,7 @@
 Crucible.app is a native, menu-bar-only macOS operator surface for the Crucible
 fleet. CRUMAC-7 connects the CRUMAC-6 interface to the versioned, read-only
 live-fleet contract governed by
-`docs/product-specs/live-fleet-observability.product-spec.md` revision 2.
+`docs/product-specs/live-fleet-observability.product-spec.md` revision 5.
 
 The production data path is deliberately narrow:
 
@@ -14,10 +14,10 @@ The production data path is deliberately narrow:
 ```
 
 The app does not use a shell, search `PATH`, connect to a host, read controller
-artifacts, or reconstruct fleet semantics. A complete fresh snapshot replaces
-state. Stale, incomplete, incompatible, and failed responses are labelled and
-retain the best truthful prior snapshot without inventing unavailable token
-usage or bounds.
+artifacts, or reconstruct fleet semantics. Accepted fresh snapshots replace
+state; partial coverage remains explicit and unavailable values stay unknown.
+Stale, incompatible, and failed responses are labelled and retain the best
+truthful prior snapshot without inventing token usage or bounds.
 
 ## Development
 

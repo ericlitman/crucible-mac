@@ -5,7 +5,7 @@ artifact_type: "prd"
 spec_revision: 1
 author: "Eric Litman"
 created_at: "2026-07-15T22:42:50-04:00"
-updated_at: "2026-07-15T23:20:26-04:00"
+updated_at: "2026-07-16T23:02:50-04:00"
 linked_github_repo: "ericlitman/crucible-mac"
 applies_to:
   - component: "Crucible.app"
@@ -88,7 +88,7 @@ Charts and summaries must remain useful without requiring the operator to unders
   section_id: acceptance_criteria
 - type: product_spec
   product_spec_path: "docs/product-specs/live-fleet-observability.product-spec.md"
-  product_spec_revision: 2
+  product_spec_revision: 5
   relation: depends_on
   title: "Crucible.app Live Fleet Observability"
 - type: code
