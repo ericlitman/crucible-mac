@@ -101,10 +101,12 @@ struct WorkHierarchyRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if subtitle != title {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
             Image(systemName: state.symbolName)

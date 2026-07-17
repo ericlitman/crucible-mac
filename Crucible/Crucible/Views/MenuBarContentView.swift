@@ -110,10 +110,12 @@ struct MenuBarContentView: View {
                                         VStack(alignment: .leading, spacing: 1) {
                                             Text(item.id)
                                                 .font(.caption.weight(.semibold))
-                                            Text(item.title)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
+                                            if item.title != item.id {
+                                                Text(item.title)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
                                         }
                                         Spacer(minLength: 4)
                                         Text(item.state.title)

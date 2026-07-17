@@ -62,7 +62,7 @@ struct FleetConditionRow: View {
                         .foregroundStyle(.secondary)
                 }
                 if let actual = condition.actual, let bound = condition.bound {
-                    Text("Observed \(actual.formatted()) · bound \(bound.formatted())")
+                    Text("Observed \(condition.formattedMeasure(actual)) · bound \(condition.formattedMeasure(bound))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
