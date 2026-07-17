@@ -9,9 +9,22 @@ struct FreshnessTests {
 
         #expect(FleetFreshness.preview(asOf: date).isCurrent)
         #expect(FleetFreshness.live(asOf: date).isCurrent)
+        #expect(!FleetFreshness.incomplete(asOf: date).isCurrent)
         #expect(!FleetFreshness.stale(asOf: date).isCurrent)
         #expect(!FleetFreshness.incompatible.isCurrent)
         #expect(!FleetFreshness.unavailable.isCurrent)
+    }
+
+    @Test("Incomplete labeling is distinct from staleness and preserves the source date")
+    func incompleteSemantics() {
+        let date = PreviewFixtures.sourceTimestamp
+        let incomplete = FleetFreshness.incomplete(asOf: date)
+
+        #expect(incomplete.title == "Incomplete")
+        #expect(incomplete.title != FleetFreshness.stale(asOf: date).title)
+        #expect(incomplete.symbolName != FleetFreshness.stale(asOf: date).symbolName)
+        #expect(incomplete.sourceDate == date)
+        #expect(incomplete != .stale(asOf: date))
     }
 
     @Test("Stale and failed presentations preserve last known state and useful errors")

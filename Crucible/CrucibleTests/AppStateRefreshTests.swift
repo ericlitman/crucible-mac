@@ -262,7 +262,7 @@ struct AppStateRefreshTests {
         state.dashboardDidAppear()
 
         var observed = 0
-        for _ in 0..<100 where observed < 1 {
+        for _ in 0..<100 {
             observed = await client.callCount()
             if observed >= 1 { break }
             try await Task.sleep(for: .milliseconds(100))
