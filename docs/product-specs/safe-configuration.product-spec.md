@@ -91,7 +91,7 @@ The configuration surface should optimize for understanding before editing: effe
   section_id: acceptance_criteria
 - type: product_spec
   product_spec_path: "docs/product-specs/live-fleet-observability.product-spec.md"
-  product_spec_revision: 4
+  product_spec_revision: 5
   relation: depends_on
   title: "Crucible.app Live Fleet Observability"
 - type: code

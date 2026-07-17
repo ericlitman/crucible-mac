@@ -144,6 +144,56 @@
         ],
         "learning": "A snapshot can truthfully describe current state but cannot guarantee delivery of transient events. Alert-mode promises must be matched to the temporal semantics and replay guarantees of their source contract."
       }
+    },
+    {
+      "event_id": "operator-front-door-and-capacity-trust",
+      "event_type": "spec_revision",
+      "occurred_at": "2026-07-17T00:03:18-04:00",
+      "summary": "Make the real status-item panel, effective-capacity contradictions, held work, explicit unavailable telemetry, stable partial-snapshot selection, and packaged accessibility proof binding acceptance requirements.",
+      "source": {
+        "product_spec_revision": 4,
+        "links": [
+          {
+            "type": "product_spec",
+            "url": "../product-specs/live-fleet-observability.product-spec.md",
+            "title": "Crucible.app Live Fleet Observability revision 4"
+          },
+          {
+            "type": "linear_issue",
+            "url": "https://linear.app/mobilyze-llc/issue/CRUMAC-7/connect-the-menu-bar-ui-to-the-live-crucible-cli-contract",
+            "title": "CRUMAC-7 Connect the menu bar UI to the live Crucible CLI contract"
+          },
+          {
+            "type": "linear_issue",
+            "url": "https://linear.app/mobilyze-llc/issue/MOB-1325/complete-supervisor-post-validation-lifecycle",
+            "title": "MOB-1325 Complete supervisor post-validation lifecycle"
+          }
+        ]
+      },
+      "decision": {
+        "outcome": "update_spec",
+        "rationale": "The operator's core failures were hidden fleet state, an implicit one-lane cap, stalled or thrashing work, and unavailable token truth. Preview-only evidence and aggregate counts can pass without solving those problems. The product contract therefore has to require the actual status-item surface, distinct configured, reported, and effective capacity with provenance, held and queue context, stable selection across incomplete observations, explicit unavailable telemetry, and production-surface accessibility proof. Missing intelligence remains a CLI contract obligation rather than app inference.",
+        "approved_by": [
+          "Eric Litman",
+          "Codex"
+        ]
+      },
+      "result": {
+        "new_product_spec_revision": 5,
+        "linked_artifacts": [
+          {
+            "type": "product_spec",
+            "url": "../product-specs/live-fleet-observability.product-spec.md",
+            "title": "Crucible.app Live Fleet Observability revision 5"
+          },
+          {
+            "type": "github_pr",
+            "url": "https://github.com/ericlitman/crucible-mac/pull/9",
+            "title": "Strengthen the live fleet visibility and notification contract"
+          }
+        ],
+        "learning": "A front door is trustworthy only when it exposes missing and contradictory operational facts as first-class states. Acceptance must bind to the real menu-bar surface and the CLI's provenance, not to previews or inferred values."
+      }
     }
   ]
 }

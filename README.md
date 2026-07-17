@@ -3,7 +3,7 @@
 Crucible.app is a native, menu-bar-only macOS operator surface for the Crucible
 fleet. CRUMAC-7 connects the CRUMAC-6 interface to the versioned, read-only
 live-fleet contract governed by
-`docs/product-specs/live-fleet-observability.product-spec.md` revision 4.
+`docs/product-specs/live-fleet-observability.product-spec.md` revision 5.
 
 The production data path is deliberately narrow:
 
