@@ -147,24 +147,44 @@ private struct HostSidebarView: View {
     let state: AppState
     let snapshot: FleetSnapshot
 
-    private var selection: Binding<String?> {
+    private enum SidebarDestination: Hashable {
+        case queue
+        case host(String)
+    }
+
+    private var selection: Binding<SidebarDestination?> {
         Binding(
-            get: { state.selectedHostID },
-            set: { hostID in
-                if let hostID {
-                    state.selectHost(hostID)
+            get: {
+                if let hostID = state.selectedHostID { return .host(hostID) }
+                return state.selection == nil ? .queue : nil
+            },
+            set: { destination in
+                switch destination {
+                case .queue: state.selectQueue()
+                case let .host(hostID): state.selectHost(hostID)
+                case nil: break
                 }
             }
         )
     }
 
     var body: some View {
-        List(snapshot.hosts, selection: selection) { host in
-            HostRow(host: host)
-                .tag(host.id)
+        List(selection: selection) {
+            Section {
+                Label("Queue", systemImage: "tray.full")
+                    .badge(snapshot.queue.count)
+                    .tag(SidebarDestination.queue)
+                    .accessibilityLabel("Queue, \(snapshot.queue.count) items")
+            }
+            Section("Hosts") {
+                ForEach(snapshot.hosts) { host in
+                    HostRow(host: host)
+                        .tag(SidebarDestination.host(host.id))
+                }
+            }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Hosts")
+        .navigationTitle("Fleet")
         .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 270)
     }
 }

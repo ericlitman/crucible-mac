@@ -151,6 +151,15 @@ final class AppState {
         setSelection(newSelection)
     }
 
+    /// Returns to the Queue scope — the persistent first-class destination —
+    /// clearing any entity selection.
+    func selectQueue() {
+        activeNotificationTargetRoute = nil
+        unresolvedNotificationTarget = nil
+        selection = nil
+        AppTelemetry.selected(kind: "queue", identifier: "queue")
+    }
+
     private func setSelection(_ newSelection: FleetSelection) {
         selection = newSelection
         switch newSelection {

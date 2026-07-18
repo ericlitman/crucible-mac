@@ -41,6 +41,24 @@ struct SelectionTests {
         #expect(state.selection == .host(hostID: "studio1"))
     }
 
+    @Test("The Queue scope is reachable again after any entity selection")
+    func queueScopeRoundTrip() {
+        let state = AppState(initialPresentation: PreviewFixtures.healthyPresentation)
+
+        state.selectHost("forge-01")
+        #expect(state.selectedHost != nil)
+
+        state.selectQueue()
+        #expect(state.selection == nil)
+        #expect(state.selectedHostID == nil)
+        #expect(state.unresolvedSelection == nil)
+
+        state.selectJob("CRU-999")
+        #expect(state.unresolvedSelection != nil)
+        state.selectQueue()
+        #expect(state.unresolvedSelection == nil)
+    }
+
     @Test("A host-less job selection exposes its job context for the content column")
     func hostlessJobContext() {
         let state = AppState(initialPresentation: PreviewFixtures.healthyPresentation)
