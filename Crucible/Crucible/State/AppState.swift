@@ -12,6 +12,7 @@ final class AppState {
     private(set) var notificationErrorMessage: String?
     private(set) var unresolvedNotificationTarget: UnresolvedNotificationTarget?
     private(set) var notificationNavigationRequest: NotificationNavigationRequest?
+    private(set) var notificationCoverageMode: NotificationCoverageMode
 
     private let refreshCoordinator: FleetRefreshCoordinator?
     private let notificationCoordinator: FleetNotificationCoordinator?
@@ -24,13 +25,17 @@ final class AppState {
     private var lastAcceptedFreshSnapshotIsAuthoritativeComplete = false
     private var notificationSnapshotRevision: UInt64 = 0
     private var activeNotificationTargetRoute: FleetAlertRoute?
+    private let coverageModeDefaults: UserDefaults
 
     init(
         initialPresentation: FleetPresentation,
         refreshCoordinator: FleetRefreshCoordinator? = nil,
         notificationCoordinator: FleetNotificationCoordinator? = nil,
-        automaticallyStarts: Bool = false
+        automaticallyStarts: Bool = false,
+        coverageModeDefaults: UserDefaults = .standard
     ) {
+        self.coverageModeDefaults = coverageModeDefaults
+        notificationCoverageMode = NotificationCoverageMode.stored(in: coverageModeDefaults)
         presentation = initialPresentation
         presentationReducer = FleetPresentationReducer(initialPresentation: initialPresentation)
         self.refreshCoordinator = refreshCoordinator
@@ -163,6 +168,14 @@ final class AppState {
         activeNotificationTargetRoute = nil
         unresolvedNotificationTarget = nil
         setSelection(newSelection)
+    }
+
+    /// AC-6: persists the operator's coverage choice. All-major delivery
+    /// activates once the CLI's durable event feed ships; important-condition
+    /// alerts run in either mode.
+    func setNotificationCoverageMode(_ mode: NotificationCoverageMode) {
+        notificationCoverageMode = mode
+        mode.store(in: coverageModeDefaults)
     }
 
     /// Returns to the Queue scope — the persistent first-class destination —

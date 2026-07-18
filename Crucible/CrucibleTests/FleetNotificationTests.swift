@@ -865,6 +865,35 @@ struct FleetNotificationTests {
             await Task.yield()
         }
     }
+
+    @Test("Coverage mode persists across app state instances and defaults to important-only")
+    func coverageModePersistence() throws {
+        let suiteName = "coverage-mode-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let first = AppState(
+            initialPresentation: .productionUnavailable,
+            coverageModeDefaults: defaults
+        )
+        #expect(first.notificationCoverageMode == .importantOnly)
+
+        first.setNotificationCoverageMode(.allMajorChanges)
+        #expect(first.notificationCoverageMode == .allMajorChanges)
+
+        let second = AppState(
+            initialPresentation: .productionUnavailable,
+            coverageModeDefaults: defaults
+        )
+        #expect(second.notificationCoverageMode == .allMajorChanges)
+
+        defaults.set("garbage", forKey: NotificationCoverageMode.defaultsKey)
+        let third = AppState(
+            initialPresentation: .productionUnavailable,
+            coverageModeDefaults: defaults
+        )
+        #expect(third.notificationCoverageMode == .importantOnly)
+    }
 }
 
 @MainActor
@@ -1006,4 +1035,5 @@ nonisolated private final class MemoryNotificationEpisodeStore: NotificationEpis
     func reconcile(authoritativeActiveEpisodeIDs: Set<String>) {
         lock.withLock { episodeIDs.formIntersection(authoritativeActiveEpisodeIDs) }
     }
+
 }
