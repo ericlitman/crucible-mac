@@ -84,6 +84,10 @@ struct FreshnessTests {
         #expect(condition(type: "token_soft_bound_exceeded", severity: .warning).presentationClass == .overTokens)
         #expect(condition(type: "provider_auth_failed", severity: .error).presentationClass == .failure)
         #expect(condition(type: "source_stale", severity: .warning).presentationClass == .advisory)
+        // "install_failed" contains the substring "stall": exact-type matching
+        // must keep it failure-grade and unitless.
+        #expect(condition(type: "install_failed", severity: .error).presentationClass == .failure)
+        #expect(!condition(type: "install_failed", severity: .error).measuresDuration)
     }
 
     @Test("Production starts empty instead of falling back to fixtures")

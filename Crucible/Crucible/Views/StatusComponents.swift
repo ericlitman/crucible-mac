@@ -104,7 +104,12 @@ struct FleetConditionRow: View {
         guard let actual = condition.actual, let bound = condition.bound else { return nil }
         var line: String
         switch condition.presentationClass {
-        case .overTime, .overTokens:
+        case .overTime:
+            let over = actual - bound
+            line = over < 60
+                ? "Just past the \(condition.formattedMeasure(bound)) bound"
+                : "\(condition.formattedMeasure(over)) over the \(condition.formattedMeasure(bound)) bound"
+        case .overTokens:
             let over = actual - bound
             line = "\(condition.formattedMeasure(over)) over the \(condition.formattedMeasure(bound)) bound"
         case .noRecentProgress:
@@ -116,8 +121,19 @@ struct FleetConditionRow: View {
         return line
     }
 
+    /// The spoken class prefix follows the visual presentation: an amber
+    /// threshold must not announce as "error".
+    private var spokenClass: String {
+        switch condition.presentationClass {
+        case .overTime: "over time"
+        case .overTokens: "over token budget"
+        case .noRecentProgress: "no recent progress"
+        case .failure, .advisory: condition.severity.rawValue
+        }
+    }
+
     private var accessibilitySummary: String {
-        var parts = [condition.severity.rawValue, condition.title, condition.affectedLabel]
+        var parts = [spokenClass, condition.title, condition.affectedLabel]
         if let measures = measuresLine {
             parts.append(measures)
         }
