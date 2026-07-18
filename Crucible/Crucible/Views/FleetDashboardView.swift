@@ -162,11 +162,14 @@ private struct HostSidebarView: View {
                 // Queue row stays highlighted — including a selection whose
                 // record is missing from a truncated snapshot.
                 if state.unresolvedNotificationTarget != nil { return nil }
-                // Resolve through the actual host: a selected host absent from
-                // this snapshot has no row to highlight, and its content scope
-                // is the queue (the detail column carries the explanation).
                 if let host = state.selectedHost { return .host(host.id) }
                 if state.selectedHostlessJob != nil { return nil }
+                // An unresolved entity selection highlights nothing: List never
+                // fires the setter for an already-selected row, so keeping the
+                // Queue row unhighlighted preserves it as the clickable escape
+                // back to queue scope while the detail pane explains the
+                // unresolved selection.
+                if state.unresolvedSelection != nil { return nil }
                 return .queue
             },
             set: { destination in
