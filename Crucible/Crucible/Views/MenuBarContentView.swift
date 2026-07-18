@@ -90,6 +90,8 @@ struct MenuBarContentView: View {
                                         .padding(.vertical, 6)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("\(host.displayName), \(host.condition.title), \(host.capacityLabel)")
                                 .accessibilityHint("Opens host detail in the dashboard")
                             }
                         }
@@ -124,8 +126,9 @@ struct MenuBarContentView: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityHint("Opens job detail in the dashboard")
                                 .accessibilityElement(children: .combine)
+                                .accessibilityLabel("\(item.id), \(item.state.title)\(item.title != item.id ? ", \(item.title)" : "")")
+                                .accessibilityHint("Opens job detail in the dashboard")
                             }
                         }
                     }
