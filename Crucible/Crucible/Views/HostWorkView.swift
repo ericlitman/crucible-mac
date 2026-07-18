@@ -22,6 +22,17 @@ struct HostWorkView: View {
                         .tag(FleetSelection.host(hostID: host.id))
                 }
 
+                if host.jobsTruncated, !host.jobs.isEmpty {
+                    Section {
+                        Label(
+                            "Job detail truncated — this list is not the host's complete work.",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
                 ForEach(host.jobs) { job in
                     Section(job.id) {
                         WorkHierarchyRow(
@@ -46,11 +57,19 @@ struct HostWorkView: View {
                 }
 
                 if host.jobs.isEmpty {
-                    ContentUnavailableView(
-                        "No jobs in this snapshot",
-                        systemImage: "tray",
-                        description: Text("The current snapshot supplies no jobs for this host.")
-                    )
+                    if host.jobsTruncated {
+                        ContentUnavailableView(
+                            "Job detail truncated",
+                            systemImage: "exclamationmark.triangle",
+                            description: Text("The CLI truncated this host's job list in the current snapshot; its work is not visible here.")
+                        )
+                    } else {
+                        ContentUnavailableView(
+                            "No jobs in this snapshot",
+                            systemImage: "tray",
+                            description: Text("The current snapshot supplies no jobs for this host.")
+                        )
+                    }
                 }
             }
             .navigationTitle(host.displayName)
