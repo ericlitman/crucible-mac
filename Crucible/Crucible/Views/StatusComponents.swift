@@ -104,14 +104,18 @@ struct FleetConditionRow: View {
         guard let actual = condition.actual, let bound = condition.bound else { return nil }
         var line: String
         switch condition.presentationClass {
-        case .overTime:
+        case .overTime where actual >= bound:
             let over = actual - bound
             line = over < 60
                 ? "Just past the \(condition.formattedMeasure(bound)) bound"
                 : "\(condition.formattedMeasure(over)) over the \(condition.formattedMeasure(bound)) bound"
-        case .overTokens:
+        case .overTokens where actual >= bound:
             let over = actual - bound
             line = "\(condition.formattedMeasure(over)) over the \(condition.formattedMeasure(bound)) bound"
+        case .overTime, .overTokens:
+            // A *_bound_exceeded payload with actual < bound contradicts
+            // itself; present the raw values rather than false arithmetic.
+            line = "Observed \(condition.formattedMeasure(actual)) · bound \(condition.formattedMeasure(bound))"
         case .noRecentProgress:
             line = "No reported progress for \(condition.formattedMeasure(actual)) — may still be working"
         case .failure, .advisory:
@@ -173,9 +177,14 @@ struct FreshnessView: View {
                 if let sourceDate = presentation.freshness.sourceDate {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         let age = context.date.timeIntervalSince(sourceDate)
-                        let relative = age < 60
-                            ? "just now"
-                            : sourceDate.formatted(.relative(presentation: .named))
+                        let relative: String
+                        if age < 0 {
+                            relative = "source clock ahead of this Mac"
+                        } else if age < 60 {
+                            relative = "just now"
+                        } else {
+                            relative = sourceDate.formatted(.relative(presentation: .named))
+                        }
                         Text("Source \(sourceDate.formatted(.dateTime.month(.abbreviated).day().hour().minute())) · \(relative)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
