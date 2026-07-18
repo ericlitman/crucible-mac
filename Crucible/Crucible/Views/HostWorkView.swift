@@ -22,6 +22,17 @@ struct HostWorkView: View {
                         .tag(FleetSelection.host(hostID: host.id))
                 }
 
+                if host.jobsTruncated, !host.jobs.isEmpty {
+                    Section {
+                        Label(
+                            "Job detail truncated — this list is not the host's complete work.",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
                 ForEach(host.jobs) { job in
                     Section(job.id) {
                         WorkHierarchyRow(

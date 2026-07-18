@@ -118,9 +118,13 @@ struct HostSnapshot: Hashable, Identifiable, Sendable {
     }
 
     var capacityLabel: String {
-        guard let activeLaneCount, let laneCapacity else { return "capacity unknown" }
-        let label = "\(activeLaneCount)/\(laneCapacity) lanes"
-        return jobsTruncated ? "\(label) · job detail truncated" : label
+        let base: String
+        if let activeLaneCount, let laneCapacity {
+            base = "\(activeLaneCount)/\(laneCapacity) lanes"
+        } else {
+            base = "capacity unknown"
+        }
+        return jobsTruncated ? "\(base) · job detail truncated" : base
     }
 }
 
