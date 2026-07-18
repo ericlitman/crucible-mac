@@ -6,12 +6,22 @@ enum FleetSelection: Hashable, Sendable {
     case lane(jobID: String, laneID: String)
 }
 
-/// A selection whose entity is absent from the current snapshot. AC-7: the
-/// selection keeps its identity and a truthful explanation instead of being
-/// silently replaced.
+/// A selection whose entity cannot be resolved to detail in the current
+/// snapshot. AC-7: the selection keeps its identity and a truthful
+/// explanation instead of being silently replaced.
 struct UnresolvedSelection: Equatable, Sendable {
+    enum Reason: Equatable, Sendable {
+        /// The entity's identity is in the current queue, but the CLI
+        /// truncated its detail out of this snapshot.
+        case detailTruncated
+        /// The snapshot is partial; the entity may exist outside coverage.
+        case partialSnapshot
+        /// The snapshot is complete and the entity is not in it.
+        case absent
+    }
+
     let selection: FleetSelection
-    let snapshotIsPartial: Bool
+    let reason: Reason
 
     var kindLabel: String {
         switch selection {
@@ -30,9 +40,14 @@ struct UnresolvedSelection: Equatable, Sendable {
     }
 
     var explanation: String {
-        snapshotIsPartial
-            ? "This \(kindLabel) is not supplied in the current partial snapshot — it may still exist outside the snapshot's coverage. The selection is retained."
-            : "This \(kindLabel) is not present in the current snapshot."
+        switch reason {
+        case .detailTruncated:
+            "This \(kindLabel) is in the current queue, but the CLI truncated its detail out of this snapshot. The selection is retained."
+        case .partialSnapshot:
+            "This \(kindLabel) is not supplied in the current partial snapshot — it may still exist outside the snapshot's coverage. The selection is retained."
+        case .absent:
+            "This \(kindLabel) is not present in the current snapshot."
+        }
     }
 }
 

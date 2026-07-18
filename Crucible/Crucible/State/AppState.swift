@@ -80,14 +80,27 @@ final class AppState {
 
     var selectionDetail: FleetSelectionDetail? { snapshot?.detail(for: selection) }
 
-    /// AC-7: a selection whose entity vanished from the snapshot is retained
-    /// with identity and a truthful reason, never silently replaced.
+    /// AC-7: a selection whose entity cannot be resolved is retained with
+    /// identity and a truthful reason, never silently replaced.
     var unresolvedSelection: UnresolvedSelection? {
         guard unresolvedNotificationTarget == nil,
               let selection,
-              snapshot != nil,
-              snapshot?.detail(for: selection) == nil else { return nil }
-        return UnresolvedSelection(selection: selection, snapshotIsPartial: currentSnapshotIsPartial)
+              let snapshot,
+              snapshot.detail(for: selection) == nil else { return nil }
+        let reason: UnresolvedSelection.Reason
+        switch selection {
+        case let .job(jobID), let .lane(jobID, _):
+            if snapshot.queue.contains(where: { $0.id == jobID }) {
+                // The identity is present in the queue; only its job detail
+                // was truncated out of this snapshot.
+                reason = currentSnapshotIsPartial ? .detailTruncated : .absent
+            } else {
+                reason = currentSnapshotIsPartial ? .partialSnapshot : .absent
+            }
+        case .host:
+            reason = currentSnapshotIsPartial ? .partialSnapshot : .absent
+        }
+        return UnresolvedSelection(selection: selection, reason: reason)
     }
 
     var pollInterval: TimeInterval {
