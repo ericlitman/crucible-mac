@@ -18,12 +18,19 @@ struct FleetDashboardView: View {
                 } content: {
                     if state.selectedHost != nil {
                         HostWorkView(state: state)
+                    } else if let job = state.selectedHostlessJob {
+                        JobWorkView(state: state, job: job)
                     } else {
                         QueueWorkView(state: state, snapshot: snapshot)
                     }
                 } detail: {
                     if let unresolvedTarget = state.unresolvedNotificationTarget {
                         UnresolvedNotificationTargetView(target: unresolvedTarget)
+                    } else if let unresolved = state.unresolvedSelection {
+                        UnresolvedSelectionView(
+                            unresolved: unresolved,
+                            sourceTimestamp: snapshot.sourceTimestamp
+                        )
                     } else {
                         FleetDetailView(detail: state.selectionDetail)
                     }
@@ -45,6 +52,27 @@ struct FleetDashboardView: View {
         .onDisappear {
             state.dashboardDidDisappear()
         }
+    }
+}
+
+private struct UnresolvedSelectionView: View {
+    let unresolved: UnresolvedSelection
+    let sourceTimestamp: Date
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Selected \(unresolved.kindLabel) unavailable", systemImage: "questionmark.circle")
+        } description: {
+            VStack(spacing: 8) {
+                Text(unresolved.identityLabel)
+                    .font(.body.monospaced())
+                Text(unresolved.explanation)
+                Text("Source snapshot \(sourceTimestamp.formatted(.dateTime.month(.abbreviated).day().hour().minute().second()))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

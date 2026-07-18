@@ -3,13 +3,55 @@ import Testing
 
 @MainActor
 struct SelectionTests {
-    @Test("State begins with the first host selected")
+    @Test("State begins in the queue scope with no implicit selection")
     func initialSelection() {
         let state = AppState(initialPresentation: PreviewFixtures.healthyPresentation)
 
-        #expect(state.selectedHostID == "forge-01")
-        #expect(state.selectionDetail?.title == "forge-01")
-        #expect(state.selectionDetail?.sourceTimestamp == PreviewFixtures.sourceTimestamp)
+        #expect(state.selection == nil)
+        #expect(state.selectedHostID == nil)
+        #expect(state.selectionDetail == nil)
+        #expect(state.unresolvedSelection == nil)
+    }
+
+    @Test("A selection absent from the snapshot is retained with identity and reason")
+    func retainedUnresolvedSelection() {
+        let state = AppState(initialPresentation: PreviewFixtures.healthyPresentation)
+
+        state.selectJob("CRU-999")
+
+        #expect(state.selection == .job(jobID: "CRU-999"))
+        #expect(state.selectionDetail == nil)
+        let unresolved = state.unresolvedSelection
+        #expect(unresolved?.identityLabel == "CRU-999")
+        #expect(unresolved?.kindLabel == "job")
+        #expect(unresolved?.explanation.contains("not present in the current snapshot") == true)
+    }
+
+    @Test("Snapshot updates never silently replace an unresolvable selection")
+    func snapshotUpdateRetainsSelection() throws {
+        let state = AppState(initialPresentation: .productionUnavailable)
+        guard case let .snapshot(incomplete) = try LiveFleetFixture.incomplete.delivery else { return }
+        state.apply(.snapshot(incomplete))
+        state.selectHost("studio1")
+        #expect(state.selectedHost != nil)
+
+        // A later failure retains the snapshot; the selection must survive too.
+        state.apply(try LiveFleetFixture.failed.delivery)
+
+        #expect(state.selection == .host(hostID: "studio1"))
+    }
+
+    @Test("A host-less job selection exposes its job context for the content column")
+    func hostlessJobContext() {
+        let state = AppState(initialPresentation: PreviewFixtures.healthyPresentation)
+
+        state.selectJob("CRU-143")
+
+        #expect(state.selectedHost == nil)
+        #expect(state.selectedHostlessJob?.id == "CRU-143")
+
+        state.selectHost("forge-01")
+        #expect(state.selectedHostlessJob == nil)
     }
 
     @Test("Job and lane selection derive progressive detail without AppKit")

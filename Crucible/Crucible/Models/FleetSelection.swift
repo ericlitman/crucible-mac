@@ -6,6 +6,36 @@ enum FleetSelection: Hashable, Sendable {
     case lane(jobID: String, laneID: String)
 }
 
+/// A selection whose entity is absent from the current snapshot. AC-7: the
+/// selection keeps its identity and a truthful explanation instead of being
+/// silently replaced.
+struct UnresolvedSelection: Equatable, Sendable {
+    let selection: FleetSelection
+    let snapshotIsPartial: Bool
+
+    var kindLabel: String {
+        switch selection {
+        case .host: "host"
+        case .job: "job"
+        case .lane: "lane"
+        }
+    }
+
+    var identityLabel: String {
+        switch selection {
+        case let .host(hostID): hostID
+        case let .job(jobID): jobID
+        case let .lane(jobID, laneID): "\(jobID) · \(laneID)"
+        }
+    }
+
+    var explanation: String {
+        snapshotIsPartial
+            ? "This \(kindLabel) is not supplied in the current partial snapshot. The selection is retained and will resolve when coverage returns."
+            : "This \(kindLabel) is not present in the current snapshot."
+    }
+}
+
 enum NotificationTargetUnavailableReason: Equatable, Sendable {
     case partialSnapshot
     case targetUnavailable

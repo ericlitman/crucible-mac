@@ -36,7 +36,9 @@ final class AppState {
         presentationReducer = FleetPresentationReducer(initialPresentation: initialPresentation)
         self.refreshCoordinator = refreshCoordinator
         self.notificationCoordinator = notificationCoordinator
-        selection = initialPresentation.snapshot?.hosts.first.map { .host(hostID: $0.id) }
+        // Queue-first default: the spec keeps Queue as a persistent first-class
+        // scope and forbids silently selecting the first host.
+        selection = nil
         AppTelemetry.launched(previewData: initialPresentation.isPreviewData)
 
         if automaticallyStarts {
@@ -52,7 +54,9 @@ final class AppState {
 
     var selectedHostID: String? {
         if unresolvedNotificationTarget != nil { return nil }
-        guard let selection else { return snapshot?.hosts.first?.id }
+        // No implicit selection: with nothing selected the dashboard shows the
+        // queue scope (the spec forbids silently selecting the first host).
+        guard let selection else { return nil }
         switch selection {
         case let .host(hostID): return hostID
         case let .job(jobID), let .lane(jobID, _): return snapshot?.job(id: jobID)?.hostID
@@ -61,7 +65,30 @@ final class AppState {
 
     var selectedHost: HostSnapshot? { snapshot?.host(id: selectedHostID) }
 
+    /// The snapshot job for a job/lane selection that has no assigned host,
+    /// so the content column can show that job's context instead of the queue.
+    var selectedHostlessJob: JobSnapshot? {
+        guard selectedHost == nil else { return nil }
+        switch selection {
+        case let .job(jobID), let .lane(jobID, _):
+            guard let job = snapshot?.job(id: jobID), job.hostID == nil else { return nil }
+            return job
+        case .host, nil:
+            return nil
+        }
+    }
+
     var selectionDetail: FleetSelectionDetail? { snapshot?.detail(for: selection) }
+
+    /// AC-7: a selection whose entity vanished from the snapshot is retained
+    /// with identity and a truthful reason, never silently replaced.
+    var unresolvedSelection: UnresolvedSelection? {
+        guard unresolvedNotificationTarget == nil,
+              let selection,
+              snapshot != nil,
+              snapshot?.detail(for: selection) == nil else { return nil }
+        return UnresolvedSelection(selection: selection, snapshotIsPartial: currentSnapshotIsPartial)
+    }
 
     var pollInterval: TimeInterval {
         FleetRefreshCadence.interval(hasVisibleSurface: !visibleSurfaces.isEmpty)
@@ -100,7 +127,6 @@ final class AppState {
                 return
             } catch {
                 presentation = presentationReducer.reducingFailure(error, current: presentation)
-                reconcileSelection()
             }
         }
         refreshTask = task
@@ -163,7 +189,6 @@ final class AppState {
             currentSnapshotIsPartial = isPartial
         }
         resolveActiveNotificationTargetIfNeeded()
-        reconcileSelection()
         if let snapshot = reduction.acceptedFreshSnapshot {
             lastAcceptedFreshSnapshotForNotifications = snapshot
             let isAuthoritativeComplete = reduction.acceptedFreshSnapshotIsPartial == false
@@ -325,12 +350,6 @@ final class AppState {
                 await self?.refreshNow()
             }
         }
-    }
-
-    private func reconcileSelection() {
-        guard unresolvedNotificationTarget == nil else { return }
-        if let selection, snapshot?.detail(for: selection) != nil { return }
-        selection = snapshot?.hosts.first.map { .host(hostID: $0.id) }
     }
 
 }
