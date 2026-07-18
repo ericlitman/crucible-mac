@@ -23,7 +23,6 @@ final class AppState {
     private var lastAcceptedFreshSnapshotForNotifications: FleetSnapshot?
     private var lastAcceptedFreshSnapshotIsAuthoritativeComplete = false
     private var notificationSnapshotRevision: UInt64 = 0
-    private var currentSnapshotIsPartial = false
     private var activeNotificationTargetRoute: FleetAlertRoute?
 
     init(
@@ -93,12 +92,12 @@ final class AppState {
             if snapshot.queue.contains(where: { $0.id == jobID }) {
                 // The identity is present in the queue; only its job detail
                 // was truncated out of this snapshot.
-                reason = currentSnapshotIsPartial ? .detailTruncated : .absent
+                reason = presentation.snapshotIsPartial ? .detailTruncated : .absent
             } else {
-                reason = currentSnapshotIsPartial ? .partialSnapshot : .absent
+                reason = presentation.snapshotIsPartial ? .partialSnapshot : .absent
             }
         case .host:
-            reason = currentSnapshotIsPartial ? .partialSnapshot : .absent
+            reason = presentation.snapshotIsPartial ? .partialSnapshot : .absent
         }
         return UnresolvedSelection(selection: selection, reason: reason)
     }
@@ -207,9 +206,6 @@ final class AppState {
     func apply(_ delivery: LiveFleetDelivery) {
         let reduction = presentationReducer.reduce(delivery, current: presentation)
         presentation = reduction.presentation
-        if let isPartial = reduction.acceptedFreshSnapshotIsPartial {
-            currentSnapshotIsPartial = isPartial
-        }
         resolveActiveNotificationTargetIfNeeded()
         if let snapshot = reduction.acceptedFreshSnapshot {
             lastAcceptedFreshSnapshotForNotifications = snapshot
@@ -346,7 +342,7 @@ final class AppState {
             selection = nil
             unresolvedNotificationTarget = UnresolvedNotificationTarget(
                 route: route,
-                reason: currentSnapshotIsPartial ? .partialSnapshot : .targetUnavailable
+                reason: presentation.snapshotIsPartial ? .partialSnapshot : .targetUnavailable
             )
             return
         }

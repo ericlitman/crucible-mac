@@ -39,7 +39,8 @@ struct FleetPresentationReducer {
             freshness: retained.map { .stale(asOf: $0.sourceTimestamp) } ?? .unavailable,
             lastSuccessfulRefresh: current.lastSuccessfulRefresh,
             errorMessage: error.localizedDescription,
-            isPreviewData: false
+            isPreviewData: false,
+            snapshotIsPartial: retained != nil && current.snapshot != nil && current.snapshotIsPartial
         )
     }
 
@@ -66,7 +67,8 @@ struct FleetPresentationReducer {
                     freshness: .live(asOf: incoming.sourceTimestamp),
                     lastSuccessfulRefresh: contract.generatedAt,
                     errorMessage: nil,
-                    isPreviewData: false
+                    isPreviewData: false,
+                    snapshotIsPartial: false
                 ),
                 acceptedFreshSnapshot: incoming,
                 acceptedFreshSnapshotIsPartial: false
@@ -75,13 +77,25 @@ struct FleetPresentationReducer {
 
         if contract.freshness.state == .stale {
             let retained = current.snapshot ?? lastCompleteSnapshot ?? incoming
+            // Track the displayed snapshot's completeness: the retained current
+            // presentation keeps its flag, a retained last-complete snapshot is
+            // complete, and a displayed stale incoming derives from the contract.
+            let retainedIsPartial: Bool
+            if current.snapshot != nil {
+                retainedIsPartial = current.snapshotIsPartial
+            } else if lastCompleteSnapshot != nil {
+                retainedIsPartial = false
+            } else {
+                retainedIsPartial = contract.completeness.state != .complete
+            }
             return FleetPresentationReduction(
                 presentation: FleetPresentation(
                     snapshot: retained,
                     freshness: .stale(asOf: retained.sourceTimestamp),
                     lastSuccessfulRefresh: current.lastSuccessfulRefresh,
                     errorMessage: staleMessage(contract),
-                    isPreviewData: false
+                    isPreviewData: false,
+                    snapshotIsPartial: retainedIsPartial
                 ),
                 acceptedFreshSnapshot: nil,
                 acceptedFreshSnapshotIsPartial: nil
@@ -94,7 +108,8 @@ struct FleetPresentationReducer {
                 freshness: .incomplete(asOf: incoming.sourceTimestamp),
                 lastSuccessfulRefresh: current.lastSuccessfulRefresh,
                 errorMessage: incompleteMessage(contract.completeness.reasons),
-                isPreviewData: false
+                isPreviewData: false,
+                snapshotIsPartial: true
             ),
             acceptedFreshSnapshot: incoming,
             acceptedFreshSnapshotIsPartial: true
@@ -119,7 +134,8 @@ struct FleetPresentationReducer {
             freshness: freshness,
             lastSuccessfulRefresh: current.lastSuccessfulRefresh,
             errorMessage: envelope.error.message,
-            isPreviewData: false
+            isPreviewData: false,
+            snapshotIsPartial: retained != nil && current.snapshot != nil && current.snapshotIsPartial
         )
     }
 
