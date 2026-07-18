@@ -155,11 +155,16 @@ private struct HostSidebarView: View {
     private var selection: Binding<SidebarDestination?> {
         Binding(
             get: {
-                // An unresolved alert target renders its own view; highlighting
-                // Queue there would misrepresent the navigation state.
+                // The highlight mirrors the content column's actual scope. An
+                // unresolved alert target renders its own view (no highlight);
+                // a host-less job shows its job context (no highlight); every
+                // other non-host state keeps the queue content visible, so the
+                // Queue row stays highlighted — including a selection whose
+                // record is missing from a truncated snapshot.
                 if state.unresolvedNotificationTarget != nil { return nil }
                 if let hostID = state.selectedHostID { return .host(hostID) }
-                return state.selection == nil ? .queue : nil
+                if state.selectedHostlessJob != nil { return nil }
+                return .queue
             },
             set: { destination in
                 switch destination {
