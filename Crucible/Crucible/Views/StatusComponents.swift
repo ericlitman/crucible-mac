@@ -103,7 +103,7 @@ struct FleetConditionRow: View {
     /// Every condition carries its observation age; the measures copy is
     /// optional (degraded sources can omit actual/bound).
     private var measuresLine: String? {
-        let seen = "seen \(condition.lastObservedAt.formatted(.relative(presentation: .named)))"
+        let seen = FleetFormat.observationAge(of: condition.lastObservedAt, prefix: "seen")
         guard let actual = condition.actual, let bound = condition.bound else { return seen.capitalized }
         var line: String
         switch condition.presentationClass {
@@ -201,6 +201,17 @@ struct FreshnessView: View {
         if age < 0 { return "source clock ahead of this Mac" }
         if age < 60 { return "just now" }
         return sourceDate.formatted(.relative(presentation: .named))
+    }
+}
+
+extension FleetFormat {
+    /// Skew-aware observation age shared by every surface: a timestamp ahead
+    /// of the local clock must never render as a future "in X minutes".
+    static func observationAge(of date: Date, at now: Date = .now, prefix: String) -> String {
+        let age = now.timeIntervalSince(date)
+        if age < 0 { return "observation clock ahead of this Mac" }
+        if age < 60 { return "\(prefix) just now" }
+        return "\(prefix) \(date.formatted(.relative(presentation: .named)))"
     }
 }
 
