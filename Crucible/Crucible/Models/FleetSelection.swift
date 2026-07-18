@@ -42,7 +42,11 @@ struct UnresolvedSelection: Equatable, Sendable {
     var explanation: String {
         switch reason {
         case .detailTruncated:
-            "This \(kindLabel) is in the current queue, but the CLI truncated its detail out of this snapshot. The selection is retained."
+            if case .lane = selection {
+                "The selected lane's job is in the current queue, but the CLI truncated the job's detail out of this snapshot. The selection is retained."
+            } else {
+                "This \(kindLabel) is in the current queue, but the CLI truncated its detail out of this snapshot. The selection is retained."
+            }
         case .partialSnapshot:
             "This \(kindLabel) is not supplied in the current partial snapshot — it may still exist outside the snapshot's coverage. The selection is retained."
         case .absent:
