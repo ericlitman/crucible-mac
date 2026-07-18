@@ -66,6 +66,26 @@ struct FreshnessTests {
         #expect(unknown.formattedMeasure(5) == "5")
     }
 
+    @Test("Threshold conditions never present as failure-grade red")
+    func conditionPresentationClasses() {
+        func condition(type: String, severity: FleetConditionSeverity) -> FleetConditionSnapshot {
+            FleetConditionSnapshot(
+                id: "c-\(type)", type: type, severity: severity,
+                hostID: nil, jobID: nil, laneID: nil,
+                firstObservedAt: .now, lastObservedAt: .now,
+                actual: 10, bound: 5, action: nil
+            )
+        }
+
+        #expect(condition(type: "stalled", severity: .error).presentationClass == .noRecentProgress)
+        #expect(condition(type: "no_progress_stall", severity: .error).presentationClass == .noRecentProgress)
+        #expect(condition(type: "time_soft_bound_exceeded", severity: .warning).presentationClass == .overTime)
+        #expect(condition(type: "time_hard_bound_exceeded", severity: .error).presentationClass == .overTime)
+        #expect(condition(type: "token_soft_bound_exceeded", severity: .warning).presentationClass == .overTokens)
+        #expect(condition(type: "provider_auth_failed", severity: .error).presentationClass == .failure)
+        #expect(condition(type: "source_stale", severity: .warning).presentationClass == .advisory)
+    }
+
     @Test("Production starts empty instead of falling back to fixtures")
     func productionUnavailable() {
         let presentation = FleetPresentation.productionUnavailable

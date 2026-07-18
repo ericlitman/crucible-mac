@@ -42,4 +42,26 @@ struct FleetConditionSnapshot: Hashable, Identifiable, Sendable {
         if measuresTokens { return "\(FleetFormat.tokens(value)) tokens" }
         return value.formatted()
     }
+
+    /// Presentation class for a condition. The CLI cannot yet distinguish
+    /// "clearly dead" from "working quietly past a threshold", so red is
+    /// reserved for critical severity and non-threshold error types; stall
+    /// and bound crossings present as prominent amber with their own glyphs.
+    enum PresentationClass {
+        case overTime
+        case overTokens
+        case noRecentProgress
+        case failure
+        case advisory
+    }
+
+    var presentationClass: PresentationClass {
+        if type.contains("stall") { return .noRecentProgress }
+        if measuresTokens, type.contains("bound") { return .overTokens }
+        if measuresDuration, type.contains("bound") { return .overTime }
+        switch severity {
+        case .critical, .error: return .failure
+        case .warning, .info: return .advisory
+        }
+    }
 }
