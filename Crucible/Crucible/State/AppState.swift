@@ -89,9 +89,11 @@ final class AppState {
         let reason: UnresolvedSelection.Reason
         switch selection {
         case let .job(jobID), let .lane(jobID, _):
-            if snapshot.queue.contains(where: { $0.id == jobID }) {
-                // The identity is present in the queue; only its job detail
-                // was truncated out of this snapshot.
+            // .detailTruncated applies only when the queued JOB record itself
+            // is missing. A lane absent from a supplied job record was simply
+            // not in that detail — queue entries identify jobs, not lanes.
+            if snapshot.job(id: jobID) == nil,
+               snapshot.queue.contains(where: { $0.id == jobID }) {
                 reason = presentation.snapshotIsPartial ? .detailTruncated : .absent
             } else {
                 reason = presentation.snapshotIsPartial ? .partialSnapshot : .absent
