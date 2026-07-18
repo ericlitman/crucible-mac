@@ -100,8 +100,11 @@ struct FleetConditionRow: View {
         }
     }
 
+    /// Every condition carries its observation age; the measures copy is
+    /// optional (degraded sources can omit actual/bound).
     private var measuresLine: String? {
-        guard let actual = condition.actual, let bound = condition.bound else { return nil }
+        let seen = "seen \(condition.lastObservedAt.formatted(.relative(presentation: .named)))"
+        guard let actual = condition.actual, let bound = condition.bound else { return seen.capitalized }
         var line: String
         switch condition.presentationClass {
         case .overTime where actual >= bound:
@@ -121,8 +124,7 @@ struct FleetConditionRow: View {
         case .failure, .advisory:
             line = "Observed \(condition.formattedMeasure(actual)) · bound \(condition.formattedMeasure(bound))"
         }
-        line += " · seen \(condition.lastObservedAt.formatted(.relative(presentation: .named)))"
-        return line
+        return "\(line) · \(seen)"
     }
 
     /// The spoken class prefix follows the visual presentation: an amber
