@@ -94,11 +94,33 @@ struct HostSnapshot: Hashable, Identifiable, Sendable {
     let condition: HostCondition
     let activeLaneCount: Int?
     let laneCapacity: Int?
+    /// The CLI supplied only part of this host's job detail (AC-7: truncation
+    /// must be exposed, never presented as a confident empty host).
+    let jobsTruncated: Bool
     let jobs: [JobSnapshot]
+
+    init(
+        id: String,
+        displayName: String,
+        condition: HostCondition,
+        activeLaneCount: Int?,
+        laneCapacity: Int?,
+        jobsTruncated: Bool = false,
+        jobs: [JobSnapshot]
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.condition = condition
+        self.activeLaneCount = activeLaneCount
+        self.laneCapacity = laneCapacity
+        self.jobsTruncated = jobsTruncated
+        self.jobs = jobs
+    }
 
     var capacityLabel: String {
         guard let activeLaneCount, let laneCapacity else { return "capacity unknown" }
-        return "\(activeLaneCount)/\(laneCapacity) lanes"
+        let label = "\(activeLaneCount)/\(laneCapacity) lanes"
+        return jobsTruncated ? "\(label) · job detail truncated" : label
     }
 }
 

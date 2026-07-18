@@ -46,11 +46,19 @@ struct HostWorkView: View {
                 }
 
                 if host.jobs.isEmpty {
-                    ContentUnavailableView(
-                        "No jobs in this snapshot",
-                        systemImage: "tray",
-                        description: Text("The current snapshot supplies no jobs for this host.")
-                    )
+                    if host.jobsTruncated {
+                        ContentUnavailableView(
+                            "Job detail truncated",
+                            systemImage: "exclamationmark.triangle",
+                            description: Text("The CLI truncated this host's job list in the current snapshot; its work is not visible here.")
+                        )
+                    } else {
+                        ContentUnavailableView(
+                            "No jobs in this snapshot",
+                            systemImage: "tray",
+                            description: Text("The current snapshot supplies no jobs for this host.")
+                        )
+                    }
                 }
             }
             .navigationTitle(host.displayName)

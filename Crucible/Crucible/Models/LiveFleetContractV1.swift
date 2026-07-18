@@ -106,6 +106,7 @@ nonisolated struct LiveFleetSnapshotV1: Codable, Equatable, Sendable {
                 condition: condition,
                 activeLaneCount: host.capacity.active,
                 laneCapacity: host.capacity.configuredLaneLimit ?? host.capacity.reportedLimit,
+                jobsTruncated: host.jobsTruncated,
                 jobs: hostJobs
             )
         }

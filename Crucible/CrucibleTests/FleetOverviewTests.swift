@@ -23,6 +23,19 @@ struct FleetOverviewTests {
         #expect(overview.hosts.first?.capacityLabel == "7/10 lanes")
     }
 
+    @Test("Per-host job truncation survives parsing and is exposed, never a confident empty host")
+    func hostJobTruncationExposed() throws {
+        guard case let .snapshot(incomplete) = try LiveFleetFixture.incomplete.delivery else { return }
+        let snapshot = incomplete.presentationSnapshot()
+
+        let pro16 = snapshot.hosts.first { $0.id == "pro16" }
+        let studio1 = snapshot.hosts.first { $0.id == "studio1" }
+        #expect(pro16?.jobsTruncated == true)
+        #expect(pro16?.capacityLabel.contains("job detail truncated") == true)
+        #expect(studio1?.jobsTruncated == false)
+        #expect(studio1?.capacityLabel.contains("truncated") == false)
+    }
+
     @Test("Work state labels remain explicit and non-color dependent")
     func workStateLabels() {
         #expect(WorkState.allCases.map(\.title) == [
