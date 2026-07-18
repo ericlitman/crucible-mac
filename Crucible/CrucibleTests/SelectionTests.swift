@@ -35,9 +35,23 @@ struct SelectionTests {
         state.selectHost("studio1")
         #expect(state.selectedHost != nil)
 
-        // A later failure retains the snapshot; the selection must survive too.
-        state.apply(try LiveFleetFixture.failed.delivery)
+        // A newer accepted snapshot that omits studio1 entirely must retain
+        // the selection identity and surface it as unresolved.
+        var newerObject = try fixtureObject()
+        newerObject["generated_at"] = "2026-07-16T12:30:05.000Z"
+        newerObject["source_observed_at"] = "2026-07-16T12:30:00.000Z"
+        guard case let .snapshot(newerWithoutStudio1) = try LiveFleetContractParser.parse(encodedFixture(newerObject)) else { return }
+        state.apply(.snapshot(newerWithoutStudio1))
 
+        #expect(state.snapshot?.host(id: "studio1") == nil)
+        #expect(state.selection == .host(hostID: "studio1"))
+        #expect(state.selectedHost == nil)
+        let unresolved = state.unresolvedSelection
+        #expect(unresolved?.identityLabel == "studio1")
+        #expect(unresolved?.kindLabel == "host")
+
+        // A later failure retains the presentation; the selection survives too.
+        state.apply(try LiveFleetFixture.failed.delivery)
         #expect(state.selection == .host(hostID: "studio1"))
     }
 
