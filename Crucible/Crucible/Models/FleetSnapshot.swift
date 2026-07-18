@@ -117,14 +117,15 @@ struct HostSnapshot: Hashable, Identifiable, Sendable {
         self.jobs = jobs
     }
 
+    /// Compact lane summary for tight rows; truncation is carried separately
+    /// (glyph in narrow layouts, spelled out in `capacityLabel` for VoiceOver).
+    var laneSummary: String {
+        guard let activeLaneCount, let laneCapacity else { return "capacity unknown" }
+        return "\(activeLaneCount)/\(laneCapacity) lanes"
+    }
+
     var capacityLabel: String {
-        let base: String
-        if let activeLaneCount, let laneCapacity {
-            base = "\(activeLaneCount)/\(laneCapacity) lanes"
-        } else {
-            base = "capacity unknown"
-        }
-        return jobsTruncated ? "\(base) · job detail truncated" : base
+        jobsTruncated ? "\(laneSummary) · job detail truncated" : laneSummary
     }
 }
 

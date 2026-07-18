@@ -61,7 +61,7 @@ struct MenuBarContentView: View {
                         let overview = FleetOverview(snapshot: snapshot)
 
                         LazyVGrid(columns: metricColumns, spacing: 7) {
-                            ForEach(WorkState.allCases) { workState in
+                            ForEach(WorkState.allCases.filter { $0 != .unknown || overview.count(for: .unknown) > 0 }) { workState in
                                 StateCountCard(state: workState, count: overview.count(for: workState))
                             }
                         }
