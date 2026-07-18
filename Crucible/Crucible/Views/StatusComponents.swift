@@ -176,16 +176,7 @@ struct FreshnessView: View {
 
                 if let sourceDate = presentation.freshness.sourceDate {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
-                        let age = context.date.timeIntervalSince(sourceDate)
-                        let relative: String
-                        if age < 0 {
-                            relative = "source clock ahead of this Mac"
-                        } else if age < 60 {
-                            relative = "just now"
-                        } else {
-                            relative = sourceDate.formatted(.relative(presentation: .named))
-                        }
-                        Text("Source \(sourceDate.formatted(.dateTime.month(.abbreviated).day().hour().minute())) · \(relative)")
+                        Text("Source \(sourceDate.formatted(.dateTime.month(.abbreviated).day().hour().minute())) · \(Self.relativeAge(of: sourceDate, at: context.date))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -201,6 +192,13 @@ struct FreshnessView: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    static func relativeAge(of sourceDate: Date, at now: Date) -> String {
+        let age = now.timeIntervalSince(sourceDate)
+        if age < 0 { return "source clock ahead of this Mac" }
+        if age < 60 { return "just now" }
+        return sourceDate.formatted(.relative(presentation: .named))
     }
 }
 
