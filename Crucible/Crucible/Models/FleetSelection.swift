@@ -31,7 +31,7 @@ struct UnresolvedSelection: Equatable, Sendable {
 
     var explanation: String {
         snapshotIsPartial
-            ? "This \(kindLabel) is not supplied in the current partial snapshot. The selection is retained and will resolve when coverage returns."
+            ? "This \(kindLabel) is not supplied in the current partial snapshot — it may still exist outside the snapshot's coverage. The selection is retained."
             : "This \(kindLabel) is not present in the current snapshot."
     }
 }

@@ -155,6 +155,9 @@ private struct HostSidebarView: View {
     private var selection: Binding<SidebarDestination?> {
         Binding(
             get: {
+                // An unresolved alert target renders its own view; highlighting
+                // Queue there would misrepresent the navigation state.
+                if state.unresolvedNotificationTarget != nil { return nil }
                 if let hostID = state.selectedHostID { return .host(hostID) }
                 return state.selection == nil ? .queue : nil
             },
