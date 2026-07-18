@@ -239,12 +239,19 @@ struct HostRow: View {
                 Text(host.displayName)
                     .fontWeight(.medium)
                     .lineLimit(1)
-                Text("\(host.condition.title) · \(host.capacityLabel)")
+                Text("\(host.condition.title) · \(host.laneSummary)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            if host.jobsTruncated {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .help("Job detail truncated in this snapshot")
+                    .accessibilityLabel("job detail truncated")
+            }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
