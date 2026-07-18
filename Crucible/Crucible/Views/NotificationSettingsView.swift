@@ -39,10 +39,26 @@ struct NotificationSettingsView: View {
             }
 
             Section("Coverage") {
-                LabeledContent("Active alerts", value: "Important conditions")
-                Text("Stall and soft or hard time-limit protection is active. Crucible alerts once per CLI condition episode.")
+                Picker("Alert coverage", selection: coverageModeBinding) {
+                    ForEach(NotificationCoverageMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+
+                switch state.notificationCoverageMode {
+                case .importantOnly:
+                    Text("Stall and soft or hard time-limit protection is active. Crucible alerts once per CLI condition episode.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .allMajorChanges:
+                    Label(
+                        "Choice saved. All-major delivery activates when the Crucible CLI supplies its durable, replayable event feed; until then important conditions continue to alert.",
+                        systemImage: "clock.badge.questionmark"
+                    )
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.orange)
+                }
 
                 LabeledContent("Token-limit alerts", value: "Waiting for CLI telemetry")
                 Text("Token-limit protection is unavailable until the Crucible CLI supplies authoritative token usage and boundary conditions.")
@@ -55,7 +71,7 @@ struct NotificationSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 390)
+        .frame(width: 480, height: 440)
         .task {
             await state.notificationSettingsDidBecomeActive()
         }
@@ -63,6 +79,13 @@ struct NotificationSettingsView: View {
             guard newPhase == .active else { return }
             Task { await state.notificationSettingsDidBecomeActive() }
         }
+    }
+
+    private var coverageModeBinding: Binding<NotificationCoverageMode> {
+        Binding(
+            get: { state.notificationCoverageMode },
+            set: { state.setNotificationCoverageMode($0) }
+        )
     }
 
     private var permissionTint: Color {
