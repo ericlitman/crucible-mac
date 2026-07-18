@@ -88,6 +88,8 @@ struct FreshnessTests {
         // must keep it failure-grade and unitless.
         #expect(condition(type: "install_failed", severity: .error).presentationClass == .failure)
         #expect(!condition(type: "install_failed", severity: .error).measuresDuration)
+        // Critical severity trumps threshold classification.
+        #expect(condition(type: "time_hard_bound_exceeded", severity: .critical).presentationClass == .failure)
     }
 
     @Test("Production starts empty instead of falling back to fixtures")

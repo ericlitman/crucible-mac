@@ -63,6 +63,7 @@ struct FleetConditionSnapshot: Hashable, Identifiable, Sendable {
     }
 
     var presentationClass: PresentationClass {
+        if severity == .critical { return .failure }
         if Self.stallTypes.contains(type) { return .noRecentProgress }
         if Self.tokenBoundTypes.contains(type) { return .overTokens }
         if Self.timeBoundTypes.contains(type) { return .overTime }
