@@ -18,12 +18,19 @@ struct FleetDashboardView: View {
                 } content: {
                     if state.selectedHost != nil {
                         HostWorkView(state: state)
+                    } else if let job = state.selectedHostlessJob {
+                        JobWorkView(state: state, job: job)
                     } else {
                         QueueWorkView(state: state, snapshot: snapshot)
                     }
                 } detail: {
                     if let unresolvedTarget = state.unresolvedNotificationTarget {
                         UnresolvedNotificationTargetView(target: unresolvedTarget)
+                    } else if let unresolved = state.unresolvedSelection {
+                        UnresolvedSelectionView(
+                            unresolved: unresolved,
+                            sourceTimestamp: snapshot.sourceTimestamp
+                        )
                     } else {
                         FleetDetailView(detail: state.selectionDetail)
                     }
@@ -45,6 +52,27 @@ struct FleetDashboardView: View {
         .onDisappear {
             state.dashboardDidDisappear()
         }
+    }
+}
+
+private struct UnresolvedSelectionView: View {
+    let unresolved: UnresolvedSelection
+    let sourceTimestamp: Date
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Selected \(unresolved.kindLabel) unavailable", systemImage: "questionmark.circle")
+        } description: {
+            VStack(spacing: 8) {
+                Text(unresolved.identityLabel)
+                    .font(.body.monospaced())
+                Text(unresolved.explanation)
+                Text("Source snapshot \(sourceTimestamp.formatted(.dateTime.month(.abbreviated).day().hour().minute().second()))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -119,24 +147,58 @@ private struct HostSidebarView: View {
     let state: AppState
     let snapshot: FleetSnapshot
 
-    private var selection: Binding<String?> {
+    private enum SidebarDestination: Hashable {
+        case queue
+        case host(String)
+    }
+
+    private var selection: Binding<SidebarDestination?> {
         Binding(
-            get: { state.selectedHostID },
-            set: { hostID in
-                if let hostID {
-                    state.selectHost(hostID)
+            get: {
+                // The highlight mirrors the content column's actual scope. An
+                // unresolved alert target renders its own view (no highlight);
+                // a host-less job shows its job context (no highlight); every
+                // other non-host state keeps the queue content visible, so the
+                // Queue row stays highlighted — including a selection whose
+                // record is missing from a truncated snapshot.
+                if state.unresolvedNotificationTarget != nil { return nil }
+                if let host = state.selectedHost { return .host(host.id) }
+                if state.selectedHostlessJob != nil { return nil }
+                // An unresolved entity selection highlights nothing: List never
+                // fires the setter for an already-selected row, so keeping the
+                // Queue row unhighlighted preserves it as the clickable escape
+                // back to queue scope while the detail pane explains the
+                // unresolved selection.
+                if state.unresolvedSelection != nil { return nil }
+                return .queue
+            },
+            set: { destination in
+                switch destination {
+                case .queue: state.selectQueue()
+                case let .host(hostID): state.selectHost(hostID)
+                case nil: break
                 }
             }
         )
     }
 
     var body: some View {
-        List(snapshot.hosts, selection: selection) { host in
-            HostRow(host: host)
-                .tag(host.id)
+        List(selection: selection) {
+            Section {
+                Label("Queue", systemImage: "tray.full")
+                    .badge(snapshot.queue.count)
+                    .tag(SidebarDestination.queue)
+                    .accessibilityLabel("Queue, \(snapshot.queue.count) items")
+            }
+            Section("Hosts") {
+                ForEach(snapshot.hosts) { host in
+                    HostRow(host: host)
+                        .tag(SidebarDestination.host(host.id))
+                }
+            }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Hosts")
+        .navigationTitle("Fleet")
         .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 270)
     }
 }

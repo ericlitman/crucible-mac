@@ -79,6 +79,49 @@ struct HostWorkView: View {
     }
 }
 
+/// Content column for a job/lane selection whose job has no assigned host:
+/// shows the job's own context (its lanes) instead of falling back to the
+/// whole queue (CRUMAC-14).
+struct JobWorkView: View {
+    let state: AppState
+    let job: JobSnapshot
+
+    private var selection: Binding<FleetSelection?> {
+        Binding(
+            get: { state.selection },
+            set: { newSelection in
+                if let newSelection { state.select(newSelection) }
+            }
+        )
+    }
+
+    var body: some View {
+        List(selection: selection) {
+            Section(job.id) {
+                WorkHierarchyRow(
+                    title: job.title,
+                    subtitle: job.currentStage ?? "Select to inspect lanes",
+                    state: job.state,
+                    symbol: "shippingbox"
+                )
+                .tag(FleetSelection.job(jobID: job.id))
+
+                ForEach(job.lanes) { lane in
+                    WorkHierarchyRow(
+                        title: lane.name,
+                        subtitle: lane.currentStage ?? "Stage unavailable",
+                        state: lane.state,
+                        symbol: "arrow.triangle.branch"
+                    )
+                    .padding(.leading, 12)
+                    .tag(FleetSelection.lane(jobID: job.id, laneID: lane.id))
+                }
+            }
+        }
+        .navigationTitle(job.id)
+    }
+}
+
 struct QueueWorkView: View {
     let state: AppState
     let snapshot: FleetSnapshot

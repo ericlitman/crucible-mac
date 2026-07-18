@@ -6,6 +6,55 @@ enum FleetSelection: Hashable, Sendable {
     case lane(jobID: String, laneID: String)
 }
 
+/// A selection whose entity cannot be resolved to detail in the current
+/// snapshot. AC-7: the selection keeps its identity and a truthful
+/// explanation instead of being silently replaced.
+struct UnresolvedSelection: Equatable, Sendable {
+    enum Reason: Equatable, Sendable {
+        /// The entity's identity is in the current queue, but the CLI
+        /// truncated its detail out of this snapshot.
+        case detailTruncated
+        /// The snapshot is partial; the entity may exist outside coverage.
+        case partialSnapshot
+        /// The snapshot is complete and the entity is not in it.
+        case absent
+    }
+
+    let selection: FleetSelection
+    let reason: Reason
+
+    var kindLabel: String {
+        switch selection {
+        case .host: "host"
+        case .job: "job"
+        case .lane: "lane"
+        }
+    }
+
+    var identityLabel: String {
+        switch selection {
+        case let .host(hostID): hostID
+        case let .job(jobID): jobID
+        case let .lane(jobID, laneID): "\(jobID) · \(laneID)"
+        }
+    }
+
+    var explanation: String {
+        switch reason {
+        case .detailTruncated:
+            if case .lane = selection {
+                "The selected lane's job is in the current queue, but the CLI truncated the job's detail out of this snapshot. The selection is retained."
+            } else {
+                "This \(kindLabel) is in the current queue, but the CLI truncated its detail out of this snapshot. The selection is retained."
+            }
+        case .partialSnapshot:
+            "This \(kindLabel) is not supplied in the current partial snapshot — it may still exist outside the snapshot's coverage. The selection is retained."
+        case .absent:
+            "This \(kindLabel) is not present in the current snapshot."
+        }
+    }
+}
+
 enum NotificationTargetUnavailableReason: Equatable, Sendable {
     case partialSnapshot
     case targetUnavailable

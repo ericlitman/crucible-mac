@@ -53,6 +53,26 @@ struct FleetPresentation: Equatable, Sendable {
     let lastSuccessfulRefresh: Date?
     let errorMessage: String?
     let isPreviewData: Bool
+    /// Whether the snapshot currently displayed has partial coverage — kept
+    /// with the presentation so it always describes what is on screen, not
+    /// just the last accepted-fresh delivery.
+    let snapshotIsPartial: Bool
+
+    init(
+        snapshot: FleetSnapshot?,
+        freshness: FleetFreshness,
+        lastSuccessfulRefresh: Date?,
+        errorMessage: String?,
+        isPreviewData: Bool,
+        snapshotIsPartial: Bool = false
+    ) {
+        self.snapshot = snapshot
+        self.freshness = freshness
+        self.lastSuccessfulRefresh = lastSuccessfulRefresh
+        self.errorMessage = errorMessage
+        self.isPreviewData = isPreviewData
+        self.snapshotIsPartial = snapshotIsPartial
+    }
 
     static let productionUnavailable = FleetPresentation(
         snapshot: nil,
