@@ -5,18 +5,29 @@ import Observation
 @Observable
 final class AppState {
     static let maximumEventsPerPoll = 100
-    private static let eventsSeedFailureThreshold = 3
-    private static let eventsSeedBackoffPollCount = 2
+    private static let eventsFeedFailureThreshold = 3
+    private static let eventsFeedBackoffPollCount = 2
 
     private(set) var presentation: FleetPresentation
     private(set) var selection: FleetSelection?
     private(set) var isRefreshing = false
     private(set) var visibleSurfaces: Set<FleetSurface> = []
     private(set) var notificationAuthorizationState: NotificationAuthorizationState = .unknown
-    private(set) var notificationErrorMessage: String?
     private(set) var unresolvedNotificationTarget: UnresolvedNotificationTarget?
     private(set) var notificationNavigationRequest: NotificationNavigationRequest?
     private(set) var notificationCoverageMode: NotificationCoverageMode
+    private var notificationPermissionError: String?
+    private var conditionDeliveryError: String?
+    private var eventsFeedError: String?
+
+    var notificationErrorMessage: String? {
+        let messages = [
+            notificationPermissionError,
+            conditionDeliveryError,
+            eventsFeedError,
+        ].compactMap { $0 }
+        return messages.isEmpty ? nil : messages.joined(separator: "\n")
+    }
 
     private let refreshCoordinator: FleetRefreshCoordinator?
     private let notificationCoordinator: FleetNotificationCoordinator?
@@ -36,8 +47,8 @@ final class AppState {
     private let coverageModeDefaults: UserDefaults
     private var eventsSeedRequired: Bool
     private var eventsReseedRequested = false
-    private var consecutiveEventsSeedFailures = 0
-    private var eventsSeedBackoffPollsRemaining = 0
+    private var consecutiveEventsFeedFailures = 0
+    private var eventsFeedBackoffPollsRemaining = 0
     private var eventsRevision: UInt64 = 0
 
     init(
@@ -206,8 +217,8 @@ final class AppState {
         eventsRefreshTask = nil
         if mode == .allMajorChanges {
             eventsReseedRequested = true
-            consecutiveEventsSeedFailures = 0
-            eventsSeedBackoffPollsRemaining = 0
+            consecutiveEventsFeedFailures = 0
+            eventsFeedBackoffPollsRemaining = 0
             rescheduleEventsPolling()
             requestEventsRefresh()
         } else {
@@ -282,7 +293,7 @@ final class AppState {
 
     func notificationSettingsDidBecomeActive() async {
         let task = enqueueNotificationOperation { state, coordinator in
-            state.notificationErrorMessage = nil
+            state.notificationPermissionError = nil
             let priorAuthorization = state.notificationAuthorizationState
             state.notificationAuthorizationState = await coordinator.authorizationState()
             state.markEventsForReseedIfReauthorized(from: priorAuthorization)
@@ -294,14 +305,14 @@ final class AppState {
 
     func requestNotificationAuthorization() async {
         let task = enqueueNotificationOperation { state, coordinator in
-            state.notificationErrorMessage = nil
+            state.notificationPermissionError = nil
             do {
                 let priorAuthorization = state.notificationAuthorizationState
                 state.notificationAuthorizationState = try await coordinator.requestAuthorization()
                 state.markEventsForReseedIfReauthorized(from: priorAuthorization)
                 await state.deliverLatestAcceptedSnapshotIfAuthorized(using: coordinator)
             } catch {
-                state.notificationErrorMessage = "Notification permission could not be updated: \(error.localizedDescription)"
+                state.notificationPermissionError = "Notification permission could not be updated: \(error.localizedDescription)"
                 state.notificationAuthorizationState = await coordinator.authorizationState()
             }
         }
@@ -418,19 +429,19 @@ final class AppState {
 
     private func applyNotificationResult(_ result: FleetNotificationResult) {
         notificationAuthorizationState = result.authorizationState
-        notificationErrorMessage = result.deliveryErrors.isEmpty
+        conditionDeliveryError = result.deliveryErrors.isEmpty
             ? nil
             : "Some alerts could not be delivered and will be retried on the next fresh update."
     }
 
     private func performEventsRefresh(revision: UInt64) async {
         guard let eventsClient, let eventsCursorStore else { return }
+        guard eventsFeedBackoffPollsRemaining == 0 else {
+            eventsFeedBackoffPollsRemaining -= 1
+            return
+        }
         let storedCursor = eventsCursorStore.cursorSeq()
         if eventsSeedRequired || eventsReseedRequested || storedCursor == nil {
-            guard eventsSeedBackoffPollsRemaining == 0 else {
-                eventsSeedBackoffPollsRemaining -= 1
-                return
-            }
             await seedEventsFromTail(
                 using: eventsClient,
                 cursorStore: eventsCursorStore,
@@ -477,8 +488,9 @@ final class AppState {
                         revision: revision
                     )
                 default:
-                    AppTelemetry.eventFeed(
-                        message: "\(envelope.error.code): \(envelope.error.message); retrying after the current cadence"
+                    recordEventsFeedFailure(
+                        requiresReseed: false,
+                        telemetryMessage: "\(envelope.error.code): \(envelope.error.message); retrying after the current cadence"
                     )
                 }
             }
@@ -498,13 +510,17 @@ final class AppState {
                     revision: revision
                 )
             } else {
-                AppTelemetry.eventFeed(
-                    message: "poll failed: \(error.localizedDescription); retrying after the current cadence"
+                recordEventsFeedFailure(
+                    requiresReseed: false,
+                    telemetryMessage: "poll failed: \(error.localizedDescription); retrying after the current cadence"
                 )
             }
         } catch {
-            AppTelemetry.eventFeed(
-                message: "poll failed: \(error.localizedDescription); retrying after the current cadence"
+            guard eventsRevision == revision,
+                  notificationCoverageMode == .allMajorChanges else { return }
+            recordEventsFeedFailure(
+                requiresReseed: false,
+                telemetryMessage: "poll failed: \(error.localizedDescription); retrying after the current cadence"
             )
         }
     }
@@ -523,14 +539,13 @@ final class AppState {
                 cursorStore.store(envelope.cursor.seq)
                 eventsSeedRequired = false
                 eventsReseedRequested = false
-                consecutiveEventsSeedFailures = 0
-                eventsSeedBackoffPollsRemaining = 0
-                notificationErrorMessage = nil
+                recordEventsFeedSuccess(deliveryErrors: [])
                 AppTelemetry.eventFeed(
                     message: "seeded at cursor \(envelope.cursor.seq); skipped \(envelope.events.count) historical events"
                 )
             case let .error(envelope):
-                recordEventsSeedFailure(
+                recordEventsFeedFailure(
+                    requiresReseed: true,
                     telemetryMessage: "seed failed with \(envelope.error.code): \(envelope.error.message)"
                 )
             }
@@ -540,33 +555,48 @@ final class AppState {
             if case let .outputTooLarge(limit) = error {
                 guard eventsRevision == revision,
                       notificationCoverageMode == .allMajorChanges else { return }
-                eventsSeedRequired = true
-                recordEventsSeedFailure(
+                recordEventsFeedFailure(
+                    requiresReseed: true,
                     telemetryMessage: "tail reseed output exceeded \(limit) bytes; keeping reseed pending"
                 )
             } else {
                 guard eventsRevision == revision,
                       notificationCoverageMode == .allMajorChanges else { return }
-                recordEventsSeedFailure(
+                recordEventsFeedFailure(
+                    requiresReseed: true,
                     telemetryMessage: "seed failed: \(error.localizedDescription)"
                 )
             }
         } catch {
             guard eventsRevision == revision,
                   notificationCoverageMode == .allMajorChanges else { return }
-            recordEventsSeedFailure(
+            recordEventsFeedFailure(
+                requiresReseed: true,
                 telemetryMessage: "seed failed: \(error.localizedDescription)"
             )
         }
     }
 
-    private func recordEventsSeedFailure(telemetryMessage: String) {
-        eventsSeedRequired = true
-        consecutiveEventsSeedFailures += 1
+    private func recordEventsFeedFailure(
+        requiresReseed: Bool,
+        telemetryMessage: String
+    ) {
+        if requiresReseed { eventsSeedRequired = true }
+        consecutiveEventsFeedFailures += 1
         AppTelemetry.eventFeed(message: telemetryMessage)
-        guard consecutiveEventsSeedFailures >= Self.eventsSeedFailureThreshold else { return }
-        notificationErrorMessage = "Live event feed unavailable. Crucible will retry automatically."
-        eventsSeedBackoffPollsRemaining = Self.eventsSeedBackoffPollCount
+        guard consecutiveEventsFeedFailures >= Self.eventsFeedFailureThreshold else { return }
+        let errorMessage = "Live event feed unavailable. Crucible will retry automatically."
+        if eventsFeedError != errorMessage { eventsFeedError = errorMessage }
+        eventsFeedBackoffPollsRemaining = Self.eventsFeedBackoffPollCount
+    }
+
+    private func recordEventsFeedSuccess(deliveryErrors: [String]) {
+        consecutiveEventsFeedFailures = 0
+        eventsFeedBackoffPollsRemaining = 0
+        let errorMessage = deliveryErrors.isEmpty
+            ? nil
+            : "Some fleet events could not be delivered and will retry from the durable event cursor."
+        if eventsFeedError != errorMessage { eventsFeedError = errorMessage }
     }
 
     private func processEventsEnvelope(
@@ -587,9 +617,7 @@ final class AppState {
             guard state.eventsRevision == revision,
                   state.notificationCoverageMode == .allMajorChanges else { return }
             state.notificationAuthorizationState = result.authorizationState
-            state.notificationErrorMessage = result.deliveryErrors.isEmpty
-                ? nil
-                : "Some fleet events could not be delivered and will retry from the durable event cursor."
+            state.recordEventsFeedSuccess(deliveryErrors: result.deliveryErrors)
             if let newCursor = result.newCursor {
                 state.eventsCursorStore?.advance(to: newCursor)
             }

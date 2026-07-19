@@ -402,7 +402,7 @@ struct LiveFleetContractParserTests {
         #expect(row.host == nil)
     }
 
-    @Test("Events reject transition classes outside the v1 contract")
+    @Test("Events accept future transition classes and render the graceful fallback")
     func unknownEventTransitionClass() throws {
         let fixtureURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -411,14 +411,20 @@ struct LiveFleetContractParserTests {
             JSONSerialization.jsonObject(with: Data(contentsOf: fixtureURL)) as? [String: Any]
         )
         var events = try #require(object["events"] as? [[String: Any]])
-        events[0]["transition_class"] = "teleported"
+        events[0]["transition_class"] = "stalled"
         object["events"] = events
 
-        #expect(throws: LiveFleetContractError.schemaViolation(
-            "$.events[0].transition_class has an unsupported value"
-        )) {
-            try LiveFleetContractParser.parseEvents(encodedFixture(object))
+        guard case let .events(envelope) = try LiveFleetContractParser.parseEvents(
+            encodedFixture(object)
+        ) else {
+            Issue.record("Expected events envelope")
+            return
         }
+        let event = try #require(envelope.events.first)
+        let payload = FleetEventAlert(event: event).notificationPayload()
+        #expect(event.transitionClass == "stalled")
+        #expect(payload.title == "CRUMAC-8 stalled")
+        #expect(payload.body == "Crucible recorded a stalled transition for CRUMAC-8.")
     }
 
     @Test("Every event-feed cursor error code decodes as a typed error delivery")
