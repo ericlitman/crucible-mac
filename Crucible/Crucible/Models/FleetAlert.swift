@@ -23,6 +23,17 @@ nonisolated struct FleetAlert: Equatable, Identifiable, Sendable {
             sourceTimestamp: sourceTimestamp
         )
     }
+
+    func notificationPayload() -> NotificationPayload {
+        NotificationPayload(
+            episodeID: episodeID,
+            requestIdentifier: "condition:\(episodeID)",
+            title: title,
+            subtitle: subtitle,
+            body: body,
+            userInfo: route.userInfo
+        )
+    }
 }
 
 nonisolated struct FleetAlertRoute: Equatable, Sendable {
@@ -42,14 +53,14 @@ nonisolated struct FleetAlertRoute: Equatable, Sendable {
         static let sourceTimestamp = "source_timestamp"
     }
 
-    var userInfo: [AnyHashable: Any] {
+    var userInfo: [String: String] {
         [
             Key.conditionEpisodeID: conditionEpisodeID,
             Key.conditionType: conditionType,
             Key.hostID: hostID,
             Key.jobID: jobID,
             Key.laneID: laneID,
-            Key.sourceTimestamp: sourceTimestamp.timeIntervalSince1970,
+            Key.sourceTimestamp: String(sourceTimestamp.timeIntervalSince1970),
         ]
     }
 
@@ -75,7 +86,7 @@ nonisolated struct FleetAlertRoute: Equatable, Sendable {
               let hostID = userInfo[Key.hostID] as? String,
               let jobID = userInfo[Key.jobID] as? String,
               let laneID = userInfo[Key.laneID] as? String,
-              let timestamp = (userInfo[Key.sourceTimestamp] as? NSNumber)?.doubleValue else {
+              let timestamp = Self.timestamp(from: userInfo[Key.sourceTimestamp]) else {
             return nil
         }
         self.init(
@@ -86,6 +97,12 @@ nonisolated struct FleetAlertRoute: Equatable, Sendable {
             laneID: laneID,
             sourceTimestamp: Date(timeIntervalSince1970: timestamp)
         )
+    }
+
+    private static func timestamp(from value: Any?) -> TimeInterval? {
+        if let number = value as? NSNumber { return number.doubleValue }
+        if let string = value as? String { return TimeInterval(string) }
+        return nil
     }
 }
 

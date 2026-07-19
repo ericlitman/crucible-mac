@@ -6,11 +6,14 @@ nonisolated enum NotificationEpisodeAdmission: Equatable, Sendable {
     case capacityReached
 }
 
-nonisolated protocol NotificationEpisodeStore: Sendable {
+nonisolated protocol NotificationDeliveryStore: Sendable {
     func contains(_ episodeID: String) -> Bool
     func admit(_ episodeID: String) -> NotificationEpisodeAdmission
     func record(_ episodeID: String)
     func abandon(_ episodeID: String)
+}
+
+nonisolated protocol NotificationEpisodeStore: NotificationDeliveryStore {
     func reconcile(authoritativeActiveEpisodeIDs: Set<String>)
 }
 

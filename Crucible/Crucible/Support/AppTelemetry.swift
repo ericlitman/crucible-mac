@@ -39,4 +39,20 @@ enum AppTelemetry {
             "Completed important-condition delivery; delivered=\(delivered, privacy: .public), errors=\(errors, privacy: .public)"
         )
     }
+
+    static func evaluatedEventNotifications(authorization: String, candidates: Int) {
+        notifications.info(
+            "Evaluated fleet events; authorization=\(authorization, privacy: .public), candidates=\(candidates, privacy: .public)"
+        )
+    }
+
+    static func completedEventNotificationDelivery(delivered: Int, errors: Int) {
+        notifications.info(
+            "Completed event delivery; delivered=\(delivered, privacy: .public), errors=\(errors, privacy: .public)"
+        )
+    }
+
+    static func eventFeed(message: String) {
+        notifications.notice("Live-fleet event feed: \(message, privacy: .public)")
+    }
 }

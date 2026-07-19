@@ -53,11 +53,11 @@ struct NotificationSettingsView: View {
                         .foregroundStyle(.secondary)
                 case .allMajorChanges:
                     Label(
-                        "Choice saved. All-major delivery activates when the Crucible CLI supplies its durable, replayable event feed; until then important conditions continue to alert.",
-                        systemImage: "clock.badge.questionmark"
+                        "Important conditions—stalls and soft or hard time and token limits—continue to alert. All major fleet transitions, including important failures and blocks, are additionally delivered from the Crucible CLI event feed and deduplicated with a durable cursor.",
+                        systemImage: "bell.badge.fill"
                     )
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.secondary)
                 }
 
                 LabeledContent("Token-limit alerts", value: "Waiting for CLI telemetry")
@@ -65,7 +65,7 @@ struct NotificationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Text("Additional alert coverage will appear only when the CLI can supply durable events that polling cannot miss.")
+                Text("Major changes come from the ordered CLI event feed; Crucible does not infer transitions by comparing snapshots.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -2,6 +2,7 @@ import Foundation
 
 nonisolated protocol CrucibleCLIClient: Sendable {
     func liveFleetSnapshot() async throws -> LiveFleetDelivery
+    func liveFleetEvents(since seq: Int?) async throws -> LiveFleetEventsDelivery
 }
 
 nonisolated enum CrucibleCLIClientError: Error, Equatable, LocalizedError, Sendable {
@@ -28,6 +29,13 @@ nonisolated struct ProcessCrucibleCLIClient: CrucibleCLIClient {
     static let installedExecutableURL = URL(fileURLWithPath: "/Users/ericlitman/.local/bin/operator-supervisor")
     static let arguments = ["live-fleet", "--contract-version", "1", "--format", "json"]
 
+    static func eventsArguments(since seq: Int?) -> [String] {
+        var arguments = ["live-fleet", "--events"]
+        if let seq { arguments += ["--since", String(seq)] }
+        arguments += ["--contract-version", "1", "--format", "json"]
+        return arguments
+    }
+
     let executableURL: URL
     let timeout: TimeInterval
     let maximumOutputBytes: Int
@@ -43,13 +51,63 @@ nonisolated struct ProcessCrucibleCLIClient: CrucibleCLIClient {
     }
 
     func liveFleetSnapshot() async throws -> LiveFleetDelivery {
+        let result = try await invoke(arguments: Self.arguments)
+        let delivery: LiveFleetDelivery
+        do {
+            delivery = try LiveFleetContractParser.parse(result.stdout)
+        } catch {
+            if result.status != 0 {
+                let detail = result.stderrString.isEmpty ? error.localizedDescription : result.stderrString
+                throw CrucibleCLIClientError.unexpectedExit(result.status, detail)
+            }
+            throw error
+        }
+
+        switch (result.status, delivery) {
+        case (0, .snapshot):
+            return delivery
+        case (0, .error(let envelope)):
+            throw CrucibleCLIClientError.contractMismatch("error envelope exited successfully: \(envelope.error.code)")
+        case (_, .error):
+            return delivery
+        case (_, .snapshot):
+            throw CrucibleCLIClientError.unexpectedExit(result.status, result.stderrString)
+        }
+    }
+
+    func liveFleetEvents(since seq: Int?) async throws -> LiveFleetEventsDelivery {
+        let result = try await invoke(arguments: Self.eventsArguments(since: seq))
+        let delivery: LiveFleetEventsDelivery
+        do {
+            delivery = try LiveFleetContractParser.parseEvents(result.stdout)
+        } catch {
+            if result.status != 0 {
+                let detail = result.stderrString.isEmpty ? error.localizedDescription : result.stderrString
+                throw CrucibleCLIClientError.unexpectedExit(result.status, detail)
+            }
+            throw error
+        }
+
+        switch (result.status, delivery) {
+        case (0, .events):
+            return delivery
+        case (0, .error(let envelope)):
+            throw CrucibleCLIClientError.contractMismatch("error envelope exited successfully: \(envelope.error.code)")
+        case (_, .error):
+            return delivery
+        case (_, .events):
+            throw CrucibleCLIClientError.unexpectedExit(result.status, result.stderrString)
+        }
+    }
+
+    private func invoke(arguments: [String]) async throws -> CommandResult {
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw CrucibleCLIClientError.executableUnavailable(executableURL.path)
         }
 
         let process = try LiveFleetCLIProcess.launch(
             executableURL: executableURL,
-            arguments: Self.arguments,
+            arguments: arguments,
             maximumOutputBytes: maximumOutputBytes
         )
         defer { process.closeOutput() }
@@ -65,27 +123,12 @@ nonisolated struct ProcessCrucibleCLIClient: CrucibleCLIClient {
             throw CrucibleCLIClientError.outputTooLarge(maximumOutputBytes)
         }
 
-        let delivery: LiveFleetDelivery
-        do {
-            delivery = try LiveFleetContractParser.parse(result.stdout)
-        } catch {
-            if status != 0 {
-                let detail = result.stderrString.isEmpty ? error.localizedDescription : result.stderrString
-                throw CrucibleCLIClientError.unexpectedExit(status, detail)
-            }
-            throw error
-        }
-
-        switch (status, delivery) {
-        case (0, .snapshot):
-            return delivery
-        case (0, .error(let envelope)):
-            throw CrucibleCLIClientError.contractMismatch("error envelope exited successfully: \(envelope.error.code)")
-        case (_, .error):
-            return delivery
-        case (_, .snapshot):
-            throw CrucibleCLIClientError.unexpectedExit(status, result.stderrString)
-        }
+        return CommandResult(status: status, stdout: result.stdout, stderrString: result.stderrString)
     }
 
+    private struct CommandResult {
+        let status: Int32
+        let stdout: Data
+        let stderrString: String
+    }
 }
