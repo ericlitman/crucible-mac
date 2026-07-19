@@ -8,6 +8,86 @@ struct CrucibleCLIClientTests {
     func productionBoundary() {
         #expect(ProcessCrucibleCLIClient.installedExecutableURL.path == "/Users/ericlitman/.local/bin/operator-supervisor")
         #expect(ProcessCrucibleCLIClient.arguments == ["live-fleet", "--contract-version", "1", "--format", "json"])
+        #expect(ProcessCrucibleCLIClient.eventsArguments(since: nil) == [
+            "live-fleet", "--events", "--contract-version", "1", "--format", "json",
+        ])
+        #expect(ProcessCrucibleCLIClient.eventsArguments(since: 7) == [
+            "live-fleet", "--events", "--since", "7", "--contract-version", "1", "--format", "json",
+        ])
+    }
+
+    @Test("Events adapter invokes live-fleet with the exact since cursor argv")
+    func exactEventsInvocation() async throws {
+        let temp = try TemporaryCLI()
+        let argumentsFile = temp.directory.appending(path: "event-arguments.txt")
+        let fixture = try temp.file(eventsEnvelopeData(), name: "events.json")
+        let executable = try temp.executable("""
+        #!/bin/sh
+        printf '%s\\n' "$@" > '\(argumentsFile.path)'
+        cat '\(fixture.path)'
+        """)
+
+        let delivery = try await ProcessCrucibleCLIClient(executableURL: executable)
+            .liveFleetEvents(since: 7)
+
+        guard case .events = delivery else {
+            Issue.record("Expected events delivery")
+            return
+        }
+        let arguments = try String(contentsOf: argumentsFile, encoding: .utf8)
+            .split(separator: "\n").map(String.init)
+        #expect(arguments == [
+            "live-fleet", "--events", "--since", "7", "--contract-version", "1", "--format", "json",
+        ])
+    }
+
+    @Test("Events adapter enforces the exit-status and typed-delivery matrix")
+    func eventsExitMatrix() async throws {
+        let temp = try TemporaryCLI()
+        let eventsFixture = try temp.file(eventsEnvelopeData(), name: "events.json")
+        let errorFixture = try temp.file(eventsErrorData(code: "cursor_expired"), name: "event-error.json")
+
+        let successEvents = try temp.executable("""
+        #!/bin/sh
+        cat '\(eventsFixture.path)'
+        """, name: "success-events")
+        guard case .events = try await ProcessCrucibleCLIClient(executableURL: successEvents)
+            .liveFleetEvents(since: 7) else {
+            Issue.record("Expected successful events delivery")
+            return
+        }
+
+        let successError = try temp.executable("""
+        #!/bin/sh
+        cat '\(errorFixture.path)'
+        """, name: "success-error")
+        await #expect(throws: CrucibleCLIClientError.contractMismatch(
+            "error envelope exited successfully: cursor_expired"
+        )) {
+            try await ProcessCrucibleCLIClient(executableURL: successError).liveFleetEvents(since: 7)
+        }
+
+        let failedError = try temp.executable("""
+        #!/bin/sh
+        cat '\(errorFixture.path)'
+        exit 4
+        """, name: "failed-error")
+        guard case let .error(envelope) = try await ProcessCrucibleCLIClient(executableURL: failedError)
+            .liveFleetEvents(since: 7) else {
+            Issue.record("Expected nonzero typed error delivery")
+            return
+        }
+        #expect(envelope.error.code == "cursor_expired")
+
+        let failedEvents = try temp.executable("""
+        #!/bin/sh
+        cat '\(eventsFixture.path)'
+        printf 'unexpected event success' >&2
+        exit 4
+        """, name: "failed-events")
+        await #expect(throws: CrucibleCLIClientError.unexpectedExit(4, "unexpected event success")) {
+            try await ProcessCrucibleCLIClient(executableURL: failedEvents).liveFleetEvents(since: 7)
+        }
     }
 
     @Test("Process adapter invokes the executable directly with exact argv")
@@ -220,10 +300,26 @@ private final class TemporaryCLI {
         return destination
     }
 
+    func file(_ data: Data, name: String) throws -> URL {
+        let destination = directory.appending(path: name)
+        try data.write(to: destination)
+        return destination
+    }
+
     func executable(_ contents: String, name: String = "operator-supervisor") throws -> URL {
         let url = directory.appending(path: name)
         try Data(contents.utf8).write(to: url)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
         return url
     }
+}
+
+private func eventsEnvelopeData() -> Data {
+    Data(#"{"schema":"crucible.live-fleet.events.v1","contract_version":1,"generated_at":"2026-07-19T08:05:00.000Z","cursor":{"seq":7},"events":[]}"#.utf8)
+}
+
+private func eventsErrorData(code: String) -> Data {
+    Data("""
+    {"schema":"crucible.live-fleet.error.v1","contract_version":1,"generated_at":"2026-07-19T08:05:00.000Z","error":{"code":"\(code)","kind":"failed","message":"event feed error","retryable":true,"source":"transitions-ledger"}}
+    """.utf8)
 }

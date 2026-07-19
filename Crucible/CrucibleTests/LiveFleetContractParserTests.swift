@@ -329,6 +329,82 @@ struct LiveFleetContractParserTests {
             try LiveFleetContractParser.parse(encodedFixture(hostMutation))
         }
     }
+
+    @Test("Events envelope decodes rows with absent optional detail and complete detail")
+    func eventsEnvelope() throws {
+        let compact: [String: Any] = [
+            "schema": "crucible.live-fleet.transition.v1",
+            "seq": 41,
+            "recorded_at": "2026-07-19T08:01:00.000Z",
+            "queue_dir": "/var/tmp/crucible/queue",
+            "id": "launched:41",
+            "transition_class": "launched",
+            "item_id": "CRUMAC-8",
+            "attempt_id": "01",
+            "to_state": NSNull(),
+            "action": NSNull(),
+            "host": "pro16",
+            "importance": "major",
+        ]
+        var full = compact
+        full["seq"] = 42
+        full["id"] = "review:42"
+        full["transition_class"] = "review"
+        full["to_state"] = "review_blocked"
+        full["action"] = "reaped"
+        full["host"] = NSNull()
+        full["reason"] = "review evidence is incomplete"
+        full["failure_class"] = "review_blocked"
+        full["remediation"] = "rerun_review"
+        full["importance"] = "important"
+        let object: [String: Any] = [
+            "schema": "crucible.live-fleet.events.v1",
+            "contract_version": 1,
+            "generated_at": "2026-07-19T08:05:00.000Z",
+            "cursor": ["seq": 42],
+            "events": [compact, full],
+        ]
+
+        guard case let .events(envelope) = try LiveFleetContractParser.parseEvents(encodedFixture(object)) else {
+            Issue.record("Expected events envelope")
+            return
+        }
+        #expect(envelope.schema == "crucible.live-fleet.events.v1")
+        #expect(envelope.contractVersion == 1)
+        #expect(envelope.cursor.seq == 42)
+        #expect(envelope.events.map(\.id) == ["launched:41", "review:42"])
+        #expect(envelope.events[0].reason == nil)
+        #expect(envelope.events[0].host == "pro16")
+        #expect(envelope.events[0].importance == .major)
+        #expect(envelope.events[1].reason == "review evidence is incomplete")
+        #expect(envelope.events[1].failureClass == "review_blocked")
+        #expect(envelope.events[1].remediation == "rerun_review")
+        #expect(envelope.events[1].importance == .important)
+    }
+
+    @Test("Every event-feed cursor error code decodes as a typed error delivery")
+    func eventErrors() throws {
+        for code in ["cursor_expired", "source_invalid", "invalid_cursor"] {
+            let object: [String: Any] = [
+                "schema": "crucible.live-fleet.error.v1",
+                "contract_version": 1,
+                "generated_at": "2026-07-19T08:05:00.000Z",
+                "error": [
+                    "code": code,
+                    "kind": "failed",
+                    "message": "event feed error",
+                    "retryable": code != "invalid_cursor",
+                    "source": "transitions-ledger",
+                ],
+            ]
+            guard case let .error(envelope) = try LiveFleetContractParser.parseEvents(encodedFixture(object)) else {
+                Issue.record("Expected error envelope for \(code)")
+                continue
+            }
+            #expect(envelope.error.code == code)
+            #expect(envelope.error.kind == .failed)
+        }
+    }
 }
 
 private func replacingNestedValue(

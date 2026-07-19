@@ -29,7 +29,7 @@ nonisolated enum NotificationAuthorizationState: Equatable, Sendable {
 nonisolated protocol SystemNotificationClient: Sendable {
     func authorizationState() async -> NotificationAuthorizationState
     func requestAuthorization() async throws -> NotificationAuthorizationState
-    func deliver(_ alert: FleetAlert) async throws
+    func deliver(_ payload: NotificationPayload) async throws
 }
 
 nonisolated enum NotificationPresentationPolicy {
@@ -63,15 +63,15 @@ nonisolated final class UserNotificationClient: SystemNotificationClient, @unche
         return await authorizationState()
     }
 
-    func deliver(_ alert: FleetAlert) async throws {
+    func deliver(_ payload: NotificationPayload) async throws {
         let content = UNMutableNotificationContent()
-        content.title = alert.title
-        content.subtitle = alert.subtitle
-        content.body = alert.body
+        content.title = payload.title
+        content.subtitle = payload.subtitle
+        content.body = payload.body
         content.sound = .default
-        content.userInfo = alert.route.userInfo
+        content.userInfo = payload.userInfo
         try await center.add(UNNotificationRequest(
-            identifier: alert.episodeID,
+            identifier: payload.episodeID,
             content: content,
             trigger: nil
         ))

@@ -51,8 +51,8 @@ struct FleetNotificationTests {
         state.apply(try delivery(.healthy, conditions: [productionCondition]))
         await state.waitForNotificationEvaluation()
 
-        let alert = try #require(harness.client.deliveredAlerts.first)
-        #expect(alert.conditionType == "stalled")
+        let alert = try #require(harness.client.deliveredPayloads.first)
+        #expect(alert.userInfo["condition_type"] == "stalled")
         #expect(alert.title == "Lane stalled · job-1")
         #expect(alert.subtitle == "Build fleet view · pro16")
         #expect(alert.body == "Implementation (implement): No meaningful progress for 23m; stall threshold is 10m. Source 2026-07-16T12:00:00Z.")
@@ -89,8 +89,14 @@ struct FleetNotificationTests {
             for: snapshot(conditions: [condition(id: "payload", type: "time_hard_bound_exceeded")])
         ).first)
 
-        let decoded = try #require(FleetAlertRoute(userInfo: alert.route.userInfo))
+        let payload = alert.notificationPayload()
+        let decoded = try #require(FleetAlertRoute(userInfo: payload.userInfo))
         #expect(decoded == alert.route)
+        #expect(payload.episodeID == alert.episodeID)
+        #expect(payload.title == alert.title)
+        #expect(payload.subtitle == alert.subtitle)
+        #expect(payload.body == alert.body)
+        #expect(payload.userInfo == alert.route.userInfo)
         #expect(decoded.conditionEpisodeID == "payload")
         #expect(decoded.conditionType == "time_hard_bound_exceeded")
         #expect(decoded.hostID == "pro16")
@@ -101,6 +107,26 @@ struct FleetNotificationTests {
         var incompletePayload = alert.route.userInfo
         incompletePayload.removeValue(forKey: "lane_id")
         #expect(FleetAlertRoute(userInfo: incompletePayload) == nil)
+    }
+
+    @Test("Major event alerts use their own unroutable discriminator and human failure copy")
+    func eventPayload() {
+        let alert = FleetEventAlert(event: event(
+            seq: 19,
+            id: "failed-launch-19",
+            transitionClass: "failed_launch",
+            reason: "the remote runner was unavailable",
+            remediation: "retry_launch"
+        ))
+        let payload = alert.notificationPayload()
+
+        #expect(payload.episodeID == "failed-launch-19")
+        #expect(payload.title == "CRUMAC-8 failed to launch")
+        #expect(payload.body == "CRUMAC-8 failed: the remote runner was unavailable. Next: retry launch.")
+        #expect(payload.userInfo == [
+            "kind": "event", "item_id": "CRUMAC-8", "transition_class": "failed_launch", "seq": "19",
+        ])
+        #expect(FleetAlertRoute(userInfo: payload.userInfo) == nil)
     }
 
     @Test("Notification delegate decodes a response and delivers it on MainActor")
@@ -276,7 +302,7 @@ struct FleetNotificationTests {
         state.apply(try delivery(.healthy, conditions: [condition(id: "first")]))
         await state.waitForNotificationEvaluation()
 
-        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["first"])
+        #expect(harness.client.deliveredPayloads.map(\.episodeID) == ["first"])
         #expect(harness.store.contains("first"))
     }
 
@@ -290,16 +316,16 @@ struct FleetNotificationTests {
 
         state.apply(try delivery(.healthy, conditions: [condition(id: "pending")]))
         await state.waitForNotificationEvaluation()
-        #expect(harness.client.deliveredAlerts.isEmpty)
+        #expect(harness.client.deliveredPayloads.isEmpty)
         #expect(!harness.store.contains("pending"))
 
         await state.requestNotificationAuthorization()
-        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["pending"])
+        #expect(harness.client.deliveredPayloads.map(\.episodeID) == ["pending"])
         #expect(harness.store.contains("pending"))
 
         state.apply(try delivery(.healthy, conditions: [condition(id: "pending")]))
         await state.waitForNotificationEvaluation()
-        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["pending"])
+        #expect(harness.client.deliveredPayloads.map(\.episodeID) == ["pending"])
     }
 
     @Test("Returning from System Settings refreshes permission, clears obsolete errors, and delivers active conditions")
@@ -328,7 +354,7 @@ struct FleetNotificationTests {
 
         #expect(state.notificationAuthorizationState == .authorized)
         #expect(state.notificationErrorMessage == nil)
-        #expect(client.deliveredAlerts.map(\.episodeID) == ["settings-active"])
+        #expect(client.deliveredPayloads.map(\.episodeID) == ["settings-active"])
     }
 
     @Test("A permission retry evaluates the latest snapshot after an active condition resolves")
@@ -364,7 +390,7 @@ struct FleetNotificationTests {
         await settingsRetry.value
         await state.waitForNotificationEvaluation()
 
-        #expect(client.deliveredAlerts.isEmpty)
+        #expect(client.deliveredPayloads.isEmpty)
         #expect(!store.contains("resolved-during-retry"))
     }
 
@@ -399,7 +425,7 @@ struct FleetNotificationTests {
         await settingsRetry.value
         await state.waitForNotificationEvaluation()
 
-        #expect(client.deliveredAlerts.isEmpty)
+        #expect(client.deliveredPayloads.isEmpty)
         #expect(!store.contains("resolved-while-authorized"))
     }
 
@@ -422,7 +448,7 @@ struct FleetNotificationTests {
 
         state.apply(try delivery(.healthy, conditions: [condition(id: "resolved-during-recovery")]))
         await state.waitForNotificationEvaluation()
-        #expect(client.deliveredAlerts.isEmpty)
+        #expect(client.deliveredPayloads.isEmpty)
 
         let settingsRetry = Task { await state.notificationSettingsDidBecomeActive() }
         await waitUntil { client.authorizationStateRequestCount == 3 }
@@ -436,7 +462,7 @@ struct FleetNotificationTests {
         await settingsRetry.value
         await state.waitForNotificationEvaluation()
 
-        #expect(client.deliveredAlerts.isEmpty)
+        #expect(client.deliveredPayloads.isEmpty)
         #expect(!store.contains("resolved-during-recovery"))
     }
 
@@ -478,7 +504,7 @@ struct FleetNotificationTests {
         state.apply(try delivery(.incomplete, conditions: [condition(id: "partial")]))
         await state.waitForNotificationEvaluation()
 
-        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["partial"])
+        #expect(harness.client.deliveredPayloads.map(\.episodeID) == ["partial"])
         #expect(state.presentation.errorMessage?.contains("incomplete") == true)
     }
 
@@ -507,7 +533,7 @@ struct FleetNotificationTests {
         ))
         await state.waitForNotificationEvaluation()
 
-        #expect(harness.client.deliveredAlerts.isEmpty)
+        #expect(harness.client.deliveredPayloads.isEmpty)
     }
 
     @Test("Partial, stale, error, and out-of-order snapshots never prune an active delivered episode")
@@ -520,7 +546,7 @@ struct FleetNotificationTests {
 
         state.apply(try delivery(.healthy, conditions: [condition(id: "retained")]))
         await state.waitForNotificationEvaluation()
-        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["retained"])
+        #expect(harness.client.deliveredPayloads.map(\.episodeID) == ["retained"])
 
         state.apply(try delivery(.stale, conditions: []))
         state.apply(try LiveFleetFixture.failed.delivery)
@@ -539,7 +565,7 @@ struct FleetNotificationTests {
         await state.waitForNotificationEvaluation()
 
         #expect(harness.store.contains("retained"))
-        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["retained"])
+        #expect(harness.client.deliveredPayloads.map(\.episodeID) == ["retained"])
     }
 
     @Test("Denial and scheduling failures do not consume an episode")
@@ -591,7 +617,7 @@ struct FleetNotificationTests {
         _ = await harness.coordinator.process(active, isAuthoritativeComplete: true)
         _ = await harness.coordinator.process(active, isAuthoritativeComplete: true)
 
-        #expect(harness.client.deliveredAlerts.map(\.episodeID) == ["same-episode"])
+        #expect(harness.client.deliveredPayloads.map(\.episodeID) == ["same-episode"])
     }
 
     @Test("More than 256 active episodes remain deduplicated until a complete snapshot prunes inactive identities")
@@ -614,14 +640,14 @@ struct FleetNotificationTests {
             snapshot(conditions: allConditions),
             isAuthoritativeComplete: true
         )
-        #expect(client.deliveredAlerts.count == 300)
+        #expect(client.deliveredPayloads.count == 300)
 
         _ = await coordinator.process(
             snapshot(conditions: survivingConditions),
             isAuthoritativeComplete: false
         )
         #expect(store.contains("episode-0"))
-        #expect(client.deliveredAlerts.count == 300)
+        #expect(client.deliveredPayloads.count == 300)
 
         _ = await coordinator.process(
             snapshot(conditions: survivingConditions),
@@ -684,7 +710,7 @@ struct FleetNotificationTests {
         #expect(firstResult.deliveryErrors.first?.contains("episode-3") == true)
         #expect(firstResult.deliveryErrors.first?.contains("will retry") == true)
         #expect(client.deliveryAttemptCount == 3)
-        #expect(client.deliveredAlerts.map(\.episodeID) == ["episode-0", "episode-1", "episode-2"])
+        #expect(client.deliveredPayloads.map(\.episodeID) == ["episode-0", "episode-1", "episode-2"])
         #expect(store.contains("episode-0"))
         #expect(store.contains("episode-1"))
         #expect(store.contains("episode-2"))
@@ -696,7 +722,7 @@ struct FleetNotificationTests {
         #expect(retryResult.deliveryErrors.first?.contains("episode-3") == true)
         #expect(retryResult.deliveryErrors.first?.contains("will retry") == true)
         #expect(client.deliveryAttemptCount == 3)
-        #expect(client.deliveredAlerts.map(\.episodeID) == ["episode-0", "episode-1", "episode-2"])
+        #expect(client.deliveredPayloads.map(\.episodeID) == ["episode-0", "episode-1", "episode-2"])
         #expect(defaults.stringArray(forKey: "episodes") == [
             "episode-0", "episode-1", "episode-2",
         ])
@@ -709,7 +735,7 @@ struct FleetNotificationTests {
         #expect(recoveredResult.deliveredEpisodeIDs == ["episode-3"])
         #expect(recoveredResult.deliveryErrors.isEmpty)
         #expect(client.deliveryAttemptCount == 4)
-        #expect(client.deliveredAlerts.map(\.episodeID) == [
+        #expect(client.deliveredPayloads.map(\.episodeID) == [
             "episode-0", "episode-1", "episode-2", "episode-3",
         ])
         #expect(!store.contains("episode-0"))
@@ -717,6 +743,359 @@ struct FleetNotificationTests {
         #expect(!store.contains("episode-2"))
         #expect(store.contains("episode-3"))
         #expect(defaults.stringArray(forKey: "episodes") == ["episode-3"])
+    }
+
+    @Test("FIFO event delivery history evicts the oldest identity without wedging admission")
+    func fifoEventStoreEviction() throws {
+        let suiteName = "event-store-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = FIFOEventDeliveryStore(defaults: defaults, key: "events", capacity: 3)
+
+        for index in 0..<5 {
+            let eventID = "event-\(index)"
+            #expect(store.admit(eventID) == .admitted)
+            store.record(eventID)
+        }
+
+        #expect(defaults.stringArray(forKey: "events") == ["event-2", "event-3", "event-4"])
+        #expect(!store.contains("event-0"))
+        #expect(store.contains("event-4"))
+        #expect(store.admit("event-4") == .alreadyTracked)
+        #expect(store.admit("event-5") == .admitted)
+        store.record("event-5")
+        #expect(defaults.stringArray(forKey: "events") == ["event-3", "event-4", "event-5"])
+    }
+
+    @Test("All-major mode seeds from tail, delivers only major events, preserves conditions, and deduplicates replay")
+    func allMajorEndToEnd() async throws {
+        let suiteName = "all-major-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        NotificationCoverageMode.allMajorChanges.store(in: defaults)
+        let historical = event(seq: 10, id: "historical", itemID: "CRUMAC-7")
+        let major = event(seq: 11, id: "major-11", itemID: "CRUMAC-8", host: "pro16")
+        let important = event(
+            seq: 12,
+            id: "important-12",
+            itemID: "CRUMAC-8",
+            importance: .important,
+            transitionClass: "review",
+            reason: "review evidence is incomplete"
+        )
+        let client = StubCLIClient(
+            delivery: try LiveFleetFixture.healthy.delivery,
+            eventDeliveries: scriptedEvents([
+                (nil, .events(eventsEnvelope(cursor: 10, events: [historical]))),
+                (10, .events(eventsEnvelope(cursor: 12, events: [major, important]))),
+                (12, .events(eventsEnvelope(cursor: 12, events: [major]))),
+            ])
+        )
+        let notificationClient = FakeSystemNotificationClient(authorizationState: .authorized)
+        let eventStore = MemoryNotificationEpisodeStore()
+        let cursorStore = EventsCursorStore(defaults: defaults, key: "cursor")
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(
+                client: notificationClient,
+                episodeStore: MemoryNotificationEpisodeStore(),
+                eventStore: eventStore
+            ),
+            eventsClient: client,
+            eventsCursorStore: cursorStore,
+            coverageModeDefaults: defaults
+        )
+
+        await state.pollMajorEventsNow()
+        #expect(notificationClient.deliveredPayloads.isEmpty)
+        #expect(cursorStore.cursorSeq() == 10)
+
+        await state.pollMajorEventsNow()
+        #expect(notificationClient.deliveredPayloads.map(\.episodeID) == ["major-11"])
+        #expect(notificationClient.deliveredPayloads[0].title == "Job CRUMAC-8 launched on pro16")
+        #expect(notificationClient.deliveredPayloads[0].userInfo == [
+            "kind": "event", "item_id": "CRUMAC-8", "transition_class": "launched", "seq": "11",
+        ])
+        #expect(!eventStore.contains("important-12"))
+        #expect(cursorStore.cursorSeq() == 12)
+
+        state.apply(try delivery(.healthy, conditions: [condition(id: "condition-all-major")]))
+        await state.waitForNotificationEvaluation()
+        #expect(notificationClient.deliveredPayloads.map(\.episodeID) == [
+            "major-11", "condition-all-major",
+        ])
+
+        await state.pollMajorEventsNow()
+        #expect(notificationClient.deliveredPayloads.map(\.episodeID) == [
+            "major-11", "condition-all-major",
+        ])
+        #expect(cursorStore.cursorSeq() == 12)
+        #expect(await client.eventCallCursors() == [nil, 10, 12])
+    }
+
+    @Test("A cursor-expired response reseeds from tail without delivering history")
+    func cursorExpiredReseeds() async throws {
+        let suiteName = "cursor-expired-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        NotificationCoverageMode.allMajorChanges.store(in: defaults)
+        let client = StubCLIClient(
+            delivery: try LiveFleetFixture.healthy.delivery,
+            eventDeliveries: scriptedEvents([
+                (nil, .events(eventsEnvelope(cursor: 5, events: [event(seq: 5, id: "old")]))),
+                (5, eventError(code: "cursor_expired")),
+            ])
+        )
+        let notificationClient = FakeSystemNotificationClient(authorizationState: .authorized)
+        let cursorStore = EventsCursorStore(defaults: defaults, key: "cursor")
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(
+                client: notificationClient,
+                episodeStore: MemoryNotificationEpisodeStore(),
+                eventStore: MemoryNotificationEpisodeStore()
+            ),
+            eventsClient: client,
+            eventsCursorStore: cursorStore,
+            coverageModeDefaults: defaults
+        )
+
+        await state.pollMajorEventsNow()
+        await state.pollMajorEventsNow()
+
+        #expect(notificationClient.deliveredPayloads.isEmpty)
+        #expect(cursorStore.cursorSeq() == 5)
+        #expect(await client.eventCallCursors() == [nil, 5, nil])
+    }
+
+    @Test("Notification re-authorization reseeds instead of replaying events accumulated while blocked")
+    func reauthorizationReseeds() async throws {
+        let suiteName = "reauthorization-event-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        NotificationCoverageMode.allMajorChanges.store(in: defaults)
+        let pending = event(seq: 1, id: "pending-while-denied")
+        let client = StubCLIClient(
+            delivery: try LiveFleetFixture.healthy.delivery,
+            eventDeliveries: scriptedEvents([
+                (nil, .events(eventsEnvelope(cursor: 0, events: []))),
+                (0, .events(eventsEnvelope(cursor: 1, events: [pending]))),
+            ])
+        )
+        let notificationClient = FakeSystemNotificationClient(authorizationState: .denied)
+        let cursorStore = EventsCursorStore(defaults: defaults, key: "cursor")
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(
+                client: notificationClient,
+                episodeStore: MemoryNotificationEpisodeStore(),
+                eventStore: MemoryNotificationEpisodeStore()
+            ),
+            eventsClient: client,
+            eventsCursorStore: cursorStore,
+            coverageModeDefaults: defaults
+        )
+
+        await state.refreshNotificationAuthorizationState()
+        await state.pollMajorEventsNow()
+        await state.pollMajorEventsNow()
+        #expect(cursorStore.cursorSeq() == 0)
+        #expect(notificationClient.deliveredPayloads.isEmpty)
+
+        notificationClient.setAuthorizationState(.authorized)
+        await state.notificationSettingsDidBecomeActive()
+        await state.pollMajorEventsNow()
+
+        #expect(cursorStore.cursorSeq() == 0)
+        #expect(notificationClient.deliveredPayloads.isEmpty)
+        #expect(await client.eventCallCursors() == [nil, 0, nil])
+    }
+
+    @Test("An oversized event backlog reseeds from tail without a notification storm")
+    func oversizedBacklogReseeds() async throws {
+        let suiteName = "oversized-event-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        NotificationCoverageMode.allMajorChanges.store(in: defaults)
+        let seedCursor = AppState.maximumEventsPerPoll + 1
+        let backlog = (1...AppState.maximumEventsPerPoll + 1).map {
+            event(seq: seedCursor + $0, id: "backlog-\($0)")
+        }
+        let client = StubCLIClient(
+            delivery: try LiveFleetFixture.healthy.delivery,
+            eventDeliveries: scriptedEvents([
+                (nil, .events(eventsEnvelope(cursor: seedCursor, events: []))),
+                (seedCursor, .events(eventsEnvelope(cursor: seedCursor + backlog.count, events: backlog))),
+            ])
+        )
+        let notificationClient = FakeSystemNotificationClient(authorizationState: .authorized)
+        let cursorStore = EventsCursorStore(defaults: defaults, key: "cursor")
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(
+                client: notificationClient,
+                episodeStore: MemoryNotificationEpisodeStore(),
+                eventStore: MemoryNotificationEpisodeStore()
+            ),
+            eventsClient: client,
+            eventsCursorStore: cursorStore,
+            coverageModeDefaults: defaults
+        )
+
+        await state.pollMajorEventsNow()
+        await state.pollMajorEventsNow()
+
+        #expect(notificationClient.deliveredPayloads.isEmpty)
+        #expect(cursorStore.cursorSeq() == seedCursor)
+        #expect(await client.eventCallCursors() == [nil, seedCursor, nil])
+    }
+
+    @Test("Invalid cursor and source errors retain the cursor for cadence-backed retry")
+    func nonExpiringFeedErrorsDoNotAdvance() async throws {
+        for code in ["source_invalid", "invalid_cursor"] {
+            let suiteName = "event-error-tests-\(code)-\(UUID().uuidString)"
+            let defaults = try #require(UserDefaults(suiteName: suiteName))
+            defer { defaults.removePersistentDomain(forName: suiteName) }
+            NotificationCoverageMode.allMajorChanges.store(in: defaults)
+            let client = StubCLIClient(
+                delivery: try LiveFleetFixture.healthy.delivery,
+                eventDeliveries: scriptedEvents([
+                    (nil, .events(eventsEnvelope(cursor: 7, events: []))),
+                    (7, eventError(code: code)),
+                ])
+            )
+            let cursorStore = EventsCursorStore(defaults: defaults, key: "cursor")
+            let state = AppState(
+                initialPresentation: .productionUnavailable,
+                notificationCoordinator: FleetNotificationCoordinator(
+                    client: FakeSystemNotificationClient(authorizationState: .authorized),
+                    episodeStore: MemoryNotificationEpisodeStore(),
+                    eventStore: MemoryNotificationEpisodeStore()
+                ),
+                eventsClient: client,
+                eventsCursorStore: cursorStore,
+                coverageModeDefaults: defaults
+            )
+
+            await state.pollMajorEventsNow()
+            await state.pollMajorEventsNow()
+
+            #expect(cursorStore.cursorSeq() == 7, "\(code) must not advance the cursor")
+            #expect(await client.eventCallCursors() == [nil, 7])
+        }
+    }
+
+    @Test("A delivery failure stops the batch at the failed event and resumes with ID deduplication")
+    func partialEventDeliveryFailure() async throws {
+        let suiteName = "partial-event-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        NotificationCoverageMode.allMajorChanges.store(in: defaults)
+        let first = event(seq: 1, id: "major-1")
+        let filtered = event(seq: 2, id: "important-2", importance: .important, transitionClass: "review")
+        let failed = event(seq: 3, id: "major-3", transitionClass: "merged")
+        let client = StubCLIClient(
+            delivery: try LiveFleetFixture.healthy.delivery,
+            eventDeliveries: scriptedEvents([
+                (nil, .events(eventsEnvelope(cursor: 0, events: []))),
+                (0, .events(eventsEnvelope(cursor: 3, events: [first, filtered, failed]))),
+                (2, .events(eventsEnvelope(cursor: 3, events: [first, failed]))),
+            ])
+        )
+        let notificationClient = FakeSystemNotificationClient(
+            authorizationState: .authorized,
+            deliveryFailureAttempts: [2]
+        )
+        let cursorStore = EventsCursorStore(defaults: defaults, key: "cursor")
+        let eventStore = MemoryNotificationEpisodeStore()
+        let state = AppState(
+            initialPresentation: .productionUnavailable,
+            notificationCoordinator: FleetNotificationCoordinator(
+                client: notificationClient,
+                episodeStore: MemoryNotificationEpisodeStore(),
+                eventStore: eventStore
+            ),
+            eventsClient: client,
+            eventsCursorStore: cursorStore,
+            coverageModeDefaults: defaults
+        )
+
+        await state.pollMajorEventsNow()
+        await state.pollMajorEventsNow()
+
+        #expect(notificationClient.deliveredPayloads.map(\.episodeID) == ["major-1"])
+        #expect(cursorStore.cursorSeq() == 2)
+        #expect(!eventStore.contains("major-3"))
+
+        await state.pollMajorEventsNow()
+
+        #expect(notificationClient.deliveredPayloads.map(\.episodeID) == ["major-1", "major-3"])
+        #expect(notificationClient.deliveryAttemptCount == 3)
+        #expect(cursorStore.cursorSeq() == 3)
+        #expect(await client.eventCallCursors() == [nil, 0, 2])
+    }
+
+    private func event(
+        seq: Int,
+        id: String,
+        itemID: String = "CRUMAC-8",
+        importance: LiveFleetEventV1.Importance = .major,
+        transitionClass: String = "launched",
+        host: String? = nil,
+        reason: String? = nil,
+        remediation: String? = nil
+    ) -> LiveFleetEventV1 {
+        LiveFleetEventV1(
+            schema: "crucible.live-fleet.transition.v1",
+            seq: seq,
+            recordedAt: Date(timeIntervalSince1970: 1_752_912_060 + Double(seq)),
+            queueDirectory: "/var/tmp/crucible/queue",
+            id: id,
+            transitionClass: transitionClass,
+            itemID: itemID,
+            attemptID: "01",
+            toState: nil,
+            action: nil,
+            host: host,
+            reason: reason,
+            failureClass: nil,
+            remediation: remediation,
+            importance: importance
+        )
+    }
+
+    private func eventsEnvelope(
+        cursor: Int,
+        events: [LiveFleetEventV1]
+    ) -> LiveFleetEventsEnvelopeV1 {
+        LiveFleetEventsEnvelopeV1(
+            schema: "crucible.live-fleet.events.v1",
+            contractVersion: 1,
+            generatedAt: Date(timeIntervalSince1970: 1_752_912_300),
+            cursor: LiveFleetEventsCursorV1(seq: cursor),
+            events: events
+        )
+    }
+
+    private func eventError(code: String) -> LiveFleetEventsDelivery {
+        .error(LiveFleetErrorEnvelopeV1(
+            schema: "crucible.live-fleet.error.v1",
+            contractVersion: 1,
+            generatedAt: Date(timeIntervalSince1970: 1_752_912_300),
+            error: LiveFleetErrorV1(
+                code: code,
+                kind: .failed,
+                message: "event cursor expired",
+                retryable: true,
+                source: "transitions-ledger"
+            )
+        ))
+    }
+
+    private func scriptedEvents(
+        _ entries: [(Int?, LiveFleetEventsDelivery)]
+    ) -> [Int?: LiveFleetEventsDelivery] {
+        Dictionary(uniqueKeysWithValues: entries)
     }
 
     private func notificationHarness(
@@ -909,26 +1288,29 @@ nonisolated private final class FakeSystemNotificationClient: SystemNotification
     private let lock = NSLock()
     private var currentAuthorizationState: NotificationAuthorizationState
     private var deliveryFailuresRemaining: Int
+    private var deliveryFailureAttempts: Set<Int>
     private var authorizationRequestFailuresRemaining: Int
     private var authorizationResponses: [StubAuthorizationResponse]
     private var storedRequestCount = 0
     private var storedAuthorizationStateRequestCount = 0
     private var storedDeliveryAttemptCount = 0
-    private var storedDeliveredAlerts: [FleetAlert] = []
+    private var storedDeliveredPayloads: [NotificationPayload] = []
 
     var requestCount: Int { lock.withLock { storedRequestCount } }
     var authorizationStateRequestCount: Int { lock.withLock { storedAuthorizationStateRequestCount } }
     var deliveryAttemptCount: Int { lock.withLock { storedDeliveryAttemptCount } }
-    var deliveredAlerts: [FleetAlert] { lock.withLock { storedDeliveredAlerts } }
+    var deliveredPayloads: [NotificationPayload] { lock.withLock { storedDeliveredPayloads } }
 
     init(
         authorizationState: NotificationAuthorizationState,
         deliveryFailuresRemaining: Int = 0,
+        deliveryFailureAttempts: Set<Int> = [],
         authorizationRequestFailuresRemaining: Int = 0,
         authorizationResponses: [StubAuthorizationResponse] = []
     ) {
         currentAuthorizationState = authorizationState
         self.deliveryFailuresRemaining = deliveryFailuresRemaining
+        self.deliveryFailureAttempts = deliveryFailureAttempts
         self.authorizationRequestFailuresRemaining = authorizationRequestFailuresRemaining
         self.authorizationResponses = authorizationResponses
     }
@@ -959,19 +1341,19 @@ nonisolated private final class FakeSystemNotificationClient: SystemNotification
         }
     }
 
-    func deliver(_ alert: FleetAlert) async throws {
+    func deliver(_ payload: NotificationPayload) async throws {
         let shouldFail = lock.withLock {
             storedDeliveryAttemptCount += 1
             if deliveryFailuresRemaining > 0 {
                 deliveryFailuresRemaining -= 1
                 return true
             }
-            return false
+            return deliveryFailureAttempts.contains(storedDeliveryAttemptCount)
         }
         if shouldFail {
             throw FakeError.deliveryFailed
         }
-        lock.withLock { storedDeliveredAlerts.append(alert) }
+        lock.withLock { storedDeliveredPayloads.append(payload) }
     }
 
     func setAuthorizationState(_ state: NotificationAuthorizationState) {

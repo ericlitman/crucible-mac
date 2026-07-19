@@ -47,6 +47,42 @@ nonisolated enum LiveFleetContractParser {
         }
     }
 
+    static func parseEvents(_ data: Data) throws -> LiveFleetEventsDelivery {
+        var duplicateScanner = JSONDuplicateKeyScanner(data: data)
+        try duplicateScanner.validate()
+
+        let object: Any
+        do {
+            object = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw LiveFleetContractError.invalidJSON(error.localizedDescription)
+        }
+        guard let root = object as? [String: Any], let schema = root["schema"] as? String else {
+            throw LiveFleetContractError.schemaViolation("top-level object and schema are required")
+        }
+
+        let decoder = makeDecoder()
+        switch schema {
+        case "crucible.live-fleet.events.v1":
+            try LiveFleetContractShapeV1.validateEvents(root)
+            let envelope = try decode(LiveFleetEventsEnvelopeV1.self, from: data, using: decoder)
+            guard envelope.contractVersion == 1 else {
+                throw LiveFleetContractError.schemaViolation("events contract_version must be 1")
+            }
+            try validateSemantics(envelope)
+            return .events(envelope)
+        case "crucible.live-fleet.error.v1":
+            try LiveFleetContractShapeV1.validateError(root)
+            let envelope = try decode(LiveFleetErrorEnvelopeV1.self, from: data, using: decoder)
+            guard envelope.contractVersion == 1 else {
+                throw LiveFleetContractError.schemaViolation("events error contract_version must be 1")
+            }
+            return .error(envelope)
+        default:
+            throw LiveFleetContractError.schemaViolation("unsupported schema \(schema)")
+        }
+    }
+
     private static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -154,6 +190,27 @@ nonisolated enum LiveFleetContractParser {
             }
             try requireNonnegative(condition.actual, at: "condition \(condition.id) actual")
             try requireNonnegative(condition.bound, at: "condition \(condition.id) bound")
+        }
+    }
+
+    private static func validateSemantics(_ envelope: LiveFleetEventsEnvelopeV1) throws {
+        try requireNonnegative(envelope.cursor.seq, at: "cursor.seq")
+        var previousSequence = 0
+        var eventIDs: Set<String> = []
+        for event in envelope.events {
+            guard event.schema == "crucible.live-fleet.transition.v1" else {
+                throw LiveFleetContractError.schemaViolation("event \(event.id) has an unsupported schema")
+            }
+            guard event.seq > previousSequence else {
+                throw LiveFleetContractError.schemaViolation("event seq values must be strictly increasing")
+            }
+            guard event.seq <= envelope.cursor.seq else {
+                throw LiveFleetContractError.schemaViolation("event seq cannot exceed cursor.seq")
+            }
+            guard eventIDs.insert(event.id).inserted else {
+                throw LiveFleetContractError.schemaViolation("duplicate event id: \(event.id)")
+            }
+            previousSequence = event.seq
         }
     }
 

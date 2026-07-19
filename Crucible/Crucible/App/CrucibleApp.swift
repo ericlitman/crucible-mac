@@ -27,16 +27,20 @@ private struct CrucibleRuntimeApp: App {
 
     init() {
         let presentation = PreviewHarness.initialPresentation()
-        let coordinator = presentation.isPreviewData ? nil : FleetRefreshCoordinator(client: ProcessCrucibleCLIClient())
+        let cliClient = ProcessCrucibleCLIClient()
+        let coordinator = presentation.isPreviewData ? nil : FleetRefreshCoordinator(client: cliClient)
         let notificationClient = UserNotificationClient()
         let notificationCoordinator = FleetNotificationCoordinator(
             client: notificationClient,
-            episodeStore: UserDefaultsNotificationEpisodeStore()
+            episodeStore: UserDefaultsNotificationEpisodeStore(),
+            eventStore: FIFOEventDeliveryStore()
         )
         let appState = AppState(
             initialPresentation: presentation,
             refreshCoordinator: coordinator,
             notificationCoordinator: notificationCoordinator,
+            eventsClient: presentation.isPreviewData ? nil : cliClient,
+            eventsCursorStore: presentation.isPreviewData ? nil : EventsCursorStore(),
             automaticallyStarts: coordinator != nil
         )
         notificationClient.setResponseHandler { [weak appState] route in

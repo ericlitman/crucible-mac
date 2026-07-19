@@ -37,6 +37,33 @@ nonisolated enum LiveFleetContractShapeV1 {
         try enumValue(error["kind"], at: "$.error.kind", allowed: ["unavailable", "incompatible", "failed"])
     }
 
+    static func validateEvents(_ root: [String: Any]) throws {
+        try object(root, at: "$", keys: ["schema", "contract_version", "generated_at", "cursor", "events"])
+        try child(root, "cursor", keys: ["seq"])
+        try array(root["events"], at: "$.events").enumerated().forEach { index, value in
+            let path = "$.events[\(index)]"
+            let row = try dictionary(value, at: path)
+            try relaxedObject(
+                row,
+                at: path,
+                requiredKeys: [
+                    "schema", "seq", "recorded_at", "queue_dir", "id", "transition_class",
+                    "item_id", "attempt_id", "to_state", "action", "host", "importance",
+                ],
+                optionalKeys: ["reason", "failure_class", "remediation"]
+            )
+            guard row["schema"] as? String == "crucible.live-fleet.transition.v1" else {
+                throw LiveFleetContractError.schemaViolation("\(path).schema has an unsupported value")
+            }
+            try enumValue(row["importance"], at: "\(path).importance", allowed: ["major", "important"])
+            for key in ["reason", "failure_class", "remediation"] where row.keys.contains(key) {
+                guard row[key] is String else {
+                    throw LiveFleetContractError.schemaViolation("\(path).\(key) must be a string when present")
+                }
+            }
+        }
+    }
+
     private static func validateSources(_ sources: [String: Any]) throws {
         try object(sources, at: "$.sources", keys: ["queue", "monitor", "capacity"])
         try child(sources, "queue", at: "$.sources", keys: ["path", "observed_at", "schema"])
@@ -145,6 +172,22 @@ nonisolated enum LiveFleetContractShapeV1 {
         guard actual == expected else {
             let missing = expected.subtracting(actual).sorted()
             let extra = actual.subtracting(expected).sorted()
+            throw LiveFleetContractError.schemaViolation("\(path) keys differ; missing=\(missing) extra=\(extra)")
+        }
+    }
+
+    private static func relaxedObject(
+        _ value: [String: Any],
+        at path: String,
+        requiredKeys: [String],
+        optionalKeys: [String]
+    ) throws {
+        let actual = Set(value.keys)
+        let required = Set(requiredKeys)
+        let allowed = required.union(optionalKeys)
+        let missing = required.subtracting(actual).sorted()
+        let extra = actual.subtracting(allowed).sorted()
+        guard missing.isEmpty, extra.isEmpty else {
             throw LiveFleetContractError.schemaViolation("\(path) keys differ; missing=\(missing) extra=\(extra)")
         }
     }
