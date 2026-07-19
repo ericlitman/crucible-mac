@@ -5,6 +5,8 @@ import Observation
 @Observable
 final class AppState {
     static let maximumEventsPerPoll = 100
+    private static let eventsSeedFailureThreshold = 3
+    private static let eventsSeedBackoffPollCount = 2
 
     private(set) var presentation: FleetPresentation
     private(set) var selection: FleetSelection?
@@ -33,6 +35,9 @@ final class AppState {
     private var activeNotificationTargetRoute: FleetAlertRoute?
     private let coverageModeDefaults: UserDefaults
     private var eventsSeedRequired: Bool
+    private var eventsReseedRequested = false
+    private var consecutiveEventsSeedFailures = 0
+    private var eventsSeedBackoffPollsRemaining = 0
     private var eventsRevision: UInt64 = 0
 
     init(
@@ -190,8 +195,8 @@ final class AppState {
         setSelection(newSelection)
     }
 
-    /// AC-6: persists the operator's coverage choice. Important-only evaluates
-    /// snapshot conditions; all-major consumes the durable event feed instead.
+    /// AC-6: persists the operator's coverage choice. Snapshot conditions run
+    /// in either mode; all-major additionally consumes the durable event feed.
     func setNotificationCoverageMode(_ mode: NotificationCoverageMode) {
         guard notificationCoverageMode != mode else { return }
         notificationCoverageMode = mode
@@ -200,9 +205,9 @@ final class AppState {
         eventsRefreshTask?.cancel()
         eventsRefreshTask = nil
         if mode == .allMajorChanges {
-            if eventsCursorStore?.cursorSeq() == nil {
-                eventsSeedRequired = true
-            }
+            eventsReseedRequested = true
+            consecutiveEventsSeedFailures = 0
+            eventsSeedBackoffPollsRemaining = 0
             rescheduleEventsPolling()
             requestEventsRefresh()
         } else {
@@ -260,13 +265,11 @@ final class AppState {
             let isAuthoritativeComplete = reduction.acceptedFreshSnapshotIsPartial == false
             lastAcceptedFreshSnapshotIsAuthoritativeComplete = isAuthoritativeComplete
             notificationSnapshotRevision &+= 1
-            if notificationCoverageMode == .importantOnly {
-                scheduleNotifications(
-                    for: snapshot,
-                    isAuthoritativeComplete: isAuthoritativeComplete,
-                    revision: notificationSnapshotRevision
-                )
-            }
+            scheduleNotifications(
+                for: snapshot,
+                isAuthoritativeComplete: isAuthoritativeComplete,
+                revision: notificationSnapshotRevision
+            )
         }
     }
 
@@ -367,18 +370,13 @@ final class AppState {
         revision: UInt64
     ) {
         _ = enqueueNotificationOperation { state, coordinator in
-            guard state.notificationSnapshotRevision == revision,
-                  state.notificationCoverageMode == .importantOnly else { return }
+            guard state.notificationSnapshotRevision == revision else { return }
             let result = await coordinator.process(
                 snapshot,
                 isAuthoritativeComplete: isAuthoritativeComplete,
-                shouldContinue: {
-                    state.notificationSnapshotRevision == revision
-                        && state.notificationCoverageMode == .importantOnly
-                }
+                shouldContinue: { state.notificationSnapshotRevision == revision }
             )
-            guard state.notificationSnapshotRevision == revision,
-                  state.notificationCoverageMode == .importantOnly else { return }
+            guard state.notificationSnapshotRevision == revision else { return }
             state.applyNotificationResult(result)
         }
     }
@@ -406,20 +404,15 @@ final class AppState {
     private func deliverLatestAcceptedSnapshotIfAuthorized(
         using notificationCoordinator: FleetNotificationCoordinator
     ) async {
-        guard notificationCoverageMode == .importantOnly,
-              notificationAuthorizationState == .authorized,
+        guard notificationAuthorizationState == .authorized,
               let snapshot = lastAcceptedFreshSnapshotForNotifications else { return }
         let revision = notificationSnapshotRevision
         let result = await notificationCoordinator.process(
             snapshot,
             isAuthoritativeComplete: lastAcceptedFreshSnapshotIsAuthoritativeComplete,
-            shouldContinue: {
-                self.notificationSnapshotRevision == revision
-                    && self.notificationCoverageMode == .importantOnly
-            }
+            shouldContinue: { self.notificationSnapshotRevision == revision }
         )
-        guard notificationSnapshotRevision == revision,
-              notificationCoverageMode == .importantOnly else { return }
+        guard notificationSnapshotRevision == revision else { return }
         applyNotificationResult(result)
     }
 
@@ -433,7 +426,11 @@ final class AppState {
     private func performEventsRefresh(revision: UInt64) async {
         guard let eventsClient, let eventsCursorStore else { return }
         let storedCursor = eventsCursorStore.cursorSeq()
-        if eventsSeedRequired || storedCursor == nil {
+        if eventsSeedRequired || eventsReseedRequested || storedCursor == nil {
+            guard eventsSeedBackoffPollsRemaining == 0 else {
+                eventsSeedBackoffPollsRemaining -= 1
+                return
+            }
             await seedEventsFromTail(
                 using: eventsClient,
                 cursorStore: eventsCursorStore,
@@ -525,12 +522,16 @@ final class AppState {
             case let .events(envelope):
                 cursorStore.store(envelope.cursor.seq)
                 eventsSeedRequired = false
+                eventsReseedRequested = false
+                consecutiveEventsSeedFailures = 0
+                eventsSeedBackoffPollsRemaining = 0
+                notificationErrorMessage = nil
                 AppTelemetry.eventFeed(
                     message: "seeded at cursor \(envelope.cursor.seq); skipped \(envelope.events.count) historical events"
                 )
             case let .error(envelope):
-                AppTelemetry.eventFeed(
-                    message: "seed failed with \(envelope.error.code): \(envelope.error.message)"
+                recordEventsSeedFailure(
+                    telemetryMessage: "seed failed with \(envelope.error.code): \(envelope.error.message)"
                 )
             }
         } catch is CancellationError {
@@ -540,15 +541,32 @@ final class AppState {
                 guard eventsRevision == revision,
                       notificationCoverageMode == .allMajorChanges else { return }
                 eventsSeedRequired = true
-                AppTelemetry.eventFeed(
-                    message: "tail reseed output exceeded \(limit) bytes; keeping reseed pending"
+                recordEventsSeedFailure(
+                    telemetryMessage: "tail reseed output exceeded \(limit) bytes; keeping reseed pending"
                 )
             } else {
-                AppTelemetry.eventFeed(message: "seed failed: \(error.localizedDescription)")
+                guard eventsRevision == revision,
+                      notificationCoverageMode == .allMajorChanges else { return }
+                recordEventsSeedFailure(
+                    telemetryMessage: "seed failed: \(error.localizedDescription)"
+                )
             }
         } catch {
-            AppTelemetry.eventFeed(message: "seed failed: \(error.localizedDescription)")
+            guard eventsRevision == revision,
+                  notificationCoverageMode == .allMajorChanges else { return }
+            recordEventsSeedFailure(
+                telemetryMessage: "seed failed: \(error.localizedDescription)"
+            )
         }
+    }
+
+    private func recordEventsSeedFailure(telemetryMessage: String) {
+        eventsSeedRequired = true
+        consecutiveEventsSeedFailures += 1
+        AppTelemetry.eventFeed(message: telemetryMessage)
+        guard consecutiveEventsSeedFailures >= Self.eventsSeedFailureThreshold else { return }
+        notificationErrorMessage = "Live event feed unavailable. Crucible will retry automatically."
+        eventsSeedBackoffPollsRemaining = Self.eventsSeedBackoffPollCount
     }
 
     private func processEventsEnvelope(
@@ -569,9 +587,9 @@ final class AppState {
             guard state.eventsRevision == revision,
                   state.notificationCoverageMode == .allMajorChanges else { return }
             state.notificationAuthorizationState = result.authorizationState
-            if !result.deliveryErrors.isEmpty {
-                state.notificationErrorMessage = "Some fleet events could not be delivered and will retry from the durable event cursor."
-            }
+            state.notificationErrorMessage = result.deliveryErrors.isEmpty
+                ? nil
+                : "Some fleet events could not be delivered and will retry from the durable event cursor."
             if let newCursor = result.newCursor {
                 state.eventsCursorStore?.advance(to: newCursor)
             }

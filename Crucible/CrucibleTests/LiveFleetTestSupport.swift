@@ -87,6 +87,7 @@ actor StubCLIClient: CrucibleCLIClient {
     private let delay: Duration
     private let shouldFail: Bool
     private let eventDeliveries: [Int?: LiveFleetEventsDelivery]
+    private var eventDeliverySequences: [Int?: [LiveFleetEventsDelivery]]
     private let eventErrors: [Int?: CrucibleCLIClientError]
     private(set) var calls = 0
     private(set) var eventCalls: [Int?] = []
@@ -96,12 +97,14 @@ actor StubCLIClient: CrucibleCLIClient {
         delay: Duration = .zero,
         shouldFail: Bool = false,
         eventDeliveries: [Int?: LiveFleetEventsDelivery] = [:],
+        eventDeliverySequences: [Int?: [LiveFleetEventsDelivery]] = [:],
         eventErrors: [Int?: CrucibleCLIClientError] = [:]
     ) {
         self.delivery = delivery
         self.delay = delay
         self.shouldFail = shouldFail
         self.eventDeliveries = eventDeliveries
+        self.eventDeliverySequences = eventDeliverySequences
         self.eventErrors = eventErrors
     }
 
@@ -118,6 +121,11 @@ actor StubCLIClient: CrucibleCLIClient {
         if delay > .zero { try await Task.sleep(for: delay) }
         if shouldFail { throw StubError.failed }
         if let error = eventErrors[seq] { throw error }
+        if var sequence = eventDeliverySequences[seq], !sequence.isEmpty {
+            let delivery = sequence.removeFirst()
+            eventDeliverySequences[seq] = sequence
+            return delivery
+        }
         guard let delivery = eventDeliveries[seq] else { throw StubError.failed }
         return delivery
     }

@@ -53,7 +53,7 @@ struct NotificationSettingsView: View {
                         .foregroundStyle(.secondary)
                 case .allMajorChanges:
                     Label(
-                        "Major fleet changes are delivered from the Crucible CLI event feed. Delivery starts from now, advances a durable cursor, and deduplicates replayed events; important conditions continue to alert.",
+                        "Important conditions—stalls and soft or hard time and token limits—continue to alert. All major fleet transitions, including important failures and blocks, are additionally delivered from the Crucible CLI event feed and deduplicated with a durable cursor.",
                         systemImage: "bell.badge.fill"
                     )
                     .font(.caption)

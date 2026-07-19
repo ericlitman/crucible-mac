@@ -58,6 +58,14 @@ nonisolated enum LiveFleetContractShapeV1 {
             guard row["schema"] as? String == "crucible.live-fleet.transition.v1" else {
                 throw LiveFleetContractError.schemaViolation("\(path).schema has an unsupported value")
             }
+            try enumValue(
+                row["transition_class"],
+                at: "\(path).transition_class",
+                allowed: [
+                    "launched", "held", "reaped", "validated", "publication", "review",
+                    "merged", "recovered", "failed_launch", "parked",
+                ]
+            )
             try enumValue(row["importance"], at: "\(path).importance", allowed: ["major", "important"])
             for key in ["reason", "failure_class", "remediation"] where row.keys.contains(key) {
                 guard row[key] is String else {

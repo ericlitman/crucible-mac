@@ -402,6 +402,25 @@ struct LiveFleetContractParserTests {
         #expect(row.host == nil)
     }
 
+    @Test("Events reject transition classes outside the v1 contract")
+    func unknownEventTransitionClass() throws {
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appending(path: "Fixtures/live-fleet-events-minimal-v1.json")
+        var object = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: fixtureURL)) as? [String: Any]
+        )
+        var events = try #require(object["events"] as? [[String: Any]])
+        events[0]["transition_class"] = "teleported"
+        object["events"] = events
+
+        #expect(throws: LiveFleetContractError.schemaViolation(
+            "$.events[0].transition_class has an unsupported value"
+        )) {
+            try LiveFleetContractParser.parseEvents(encodedFixture(object))
+        }
+    }
+
     @Test("Every event-feed cursor error code decodes as a typed error delivery")
     func eventErrors() throws {
         for code in ["cursor_expired", "source_invalid", "invalid_cursor"] {
