@@ -382,6 +382,26 @@ struct LiveFleetContractParserTests {
         #expect(envelope.events[1].importance == .important)
     }
 
+    @Test("Events rows require only the seven fields declared by the v1 schema")
+    func minimalEventsRow() throws {
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appending(path: "Fixtures/live-fleet-events-minimal-v1.json")
+        let data = try Data(contentsOf: fixtureURL)
+
+        guard case let .events(envelope) = try LiveFleetContractParser.parseEvents(data) else {
+            Issue.record("Expected events envelope")
+            return
+        }
+        let row = try #require(envelope.events.first)
+        #expect(row.id == "parked:43")
+        #expect(row.queueDirectory == nil)
+        #expect(row.attemptID == nil)
+        #expect(row.toState == nil)
+        #expect(row.action == nil)
+        #expect(row.host == nil)
+    }
+
     @Test("Every event-feed cursor error code decodes as a typed error delivery")
     func eventErrors() throws {
         for code in ["cursor_expired", "source_invalid", "invalid_cursor"] {

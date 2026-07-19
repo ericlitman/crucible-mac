@@ -91,19 +91,18 @@ final class FleetNotificationCoordinator {
         _ events: [LiveFleetEventV1],
         shouldContinue: @MainActor @Sendable () -> Bool = { true }
     ) async -> FleetEventNotificationResult {
-        let majorEvents = events.filter { $0.importance == .major }
         let authorizationState = await client.authorizationState()
         AppTelemetry.evaluatedEventNotifications(
             authorization: authorizationState.title,
-            candidates: majorEvents.count
+            candidates: events.count
         )
 
         let delivery: DeliveryLoopResult
         if authorizationState == .authorized, shouldContinue() {
             delivery = await deliver(
-                majorEvents.map { FleetEventAlert(event: $0).notificationPayload() },
+                events.map { FleetEventAlert(event: $0).notificationPayload() },
                 using: eventStore,
-                capacityError: "Major-event delivery history could not accept this event.",
+                capacityError: "Event delivery history could not accept this event.",
                 stopsOnFailure: true,
                 shouldContinue: shouldContinue
             )
@@ -116,10 +115,6 @@ final class FleetNotificationCoordinator {
         var newCursor: Int?
         for event in events {
             guard shouldContinue() else { break }
-            if event.importance == .important {
-                newCursor = max(newCursor ?? 0, event.seq)
-                continue
-            }
             guard let outcome = outcomeByID[event.id], outcome.reachedFinality else { break }
             newCursor = max(newCursor ?? 0, event.seq)
         }

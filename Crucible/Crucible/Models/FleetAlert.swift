@@ -27,6 +27,7 @@ nonisolated struct FleetAlert: Equatable, Identifiable, Sendable {
     func notificationPayload() -> NotificationPayload {
         NotificationPayload(
             episodeID: episodeID,
+            requestIdentifier: "condition:\(episodeID)",
             title: title,
             subtitle: subtitle,
             body: body,

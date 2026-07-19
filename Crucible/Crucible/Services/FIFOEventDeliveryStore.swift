@@ -39,7 +39,7 @@ nonisolated final class FIFOEventDeliveryStore: NotificationDeliveryStore, @unch
         lock.withLock {
             precondition(
                 admittedEventIDs.remove(episodeID) != nil,
-                "A major event must be admitted before it is recorded"
+                "An event must be admitted before it is recorded"
             )
             var eventIDs = storedEventIDs()
             eventIDs.append(episodeID)

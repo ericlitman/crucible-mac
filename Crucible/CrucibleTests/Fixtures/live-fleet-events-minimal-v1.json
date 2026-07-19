@@ -1,0 +1,17 @@
+{
+  "schema": "crucible.live-fleet.events.v1",
+  "contract_version": 1,
+  "generated_at": "2026-07-19T08:05:00.000Z",
+  "cursor": { "seq": 43 },
+  "events": [
+    {
+      "schema": "crucible.live-fleet.transition.v1",
+      "seq": 43,
+      "recorded_at": "2026-07-19T08:04:00.000Z",
+      "id": "parked:43",
+      "transition_class": "parked",
+      "item_id": "CRUMAC-8",
+      "importance": "important"
+    }
+  ]
+}

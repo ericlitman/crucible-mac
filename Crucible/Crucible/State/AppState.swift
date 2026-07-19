@@ -32,7 +32,7 @@ final class AppState {
     private var notificationSnapshotRevision: UInt64 = 0
     private var activeNotificationTargetRoute: FleetAlertRoute?
     private let coverageModeDefaults: UserDefaults
-    private var eventsSeedRequired = true
+    private var eventsSeedRequired: Bool
     private var eventsRevision: UInt64 = 0
 
     init(
@@ -52,6 +52,7 @@ final class AppState {
         self.notificationCoordinator = notificationCoordinator
         self.eventsClient = eventsClient
         self.eventsCursorStore = eventsCursorStore
+        eventsSeedRequired = eventsCursorStore?.cursorSeq() == nil
         // Queue-first default: the spec keeps Queue as a persistent first-class
         // scope and forbids silently selecting the first host.
         selection = nil
@@ -137,7 +138,6 @@ final class AppState {
     func stopPolling() {
         pollingStarted = false
         eventsRevision &+= 1
-        eventsSeedRequired = true
         pollTask?.cancel()
         pollTask = nil
         eventsPollTask?.cancel()
@@ -190,9 +190,8 @@ final class AppState {
         setSelection(newSelection)
     }
 
-    /// AC-6: persists the operator's coverage choice. Important-condition
-    /// alerts run in either mode; all-major additionally consumes the durable
-    /// event feed from its current tail.
+    /// AC-6: persists the operator's coverage choice. Important-only evaluates
+    /// snapshot conditions; all-major consumes the durable event feed instead.
     func setNotificationCoverageMode(_ mode: NotificationCoverageMode) {
         guard notificationCoverageMode != mode else { return }
         notificationCoverageMode = mode
@@ -201,7 +200,9 @@ final class AppState {
         eventsRefreshTask?.cancel()
         eventsRefreshTask = nil
         if mode == .allMajorChanges {
-            eventsSeedRequired = true
+            if eventsCursorStore?.cursorSeq() == nil {
+                eventsSeedRequired = true
+            }
             rescheduleEventsPolling()
             requestEventsRefresh()
         } else {
@@ -259,11 +260,13 @@ final class AppState {
             let isAuthoritativeComplete = reduction.acceptedFreshSnapshotIsPartial == false
             lastAcceptedFreshSnapshotIsAuthoritativeComplete = isAuthoritativeComplete
             notificationSnapshotRevision &+= 1
-            scheduleNotifications(
-                for: snapshot,
-                isAuthoritativeComplete: isAuthoritativeComplete,
-                revision: notificationSnapshotRevision
-            )
+            if notificationCoverageMode == .importantOnly {
+                scheduleNotifications(
+                    for: snapshot,
+                    isAuthoritativeComplete: isAuthoritativeComplete,
+                    revision: notificationSnapshotRevision
+                )
+            }
         }
     }
 
@@ -364,13 +367,18 @@ final class AppState {
         revision: UInt64
     ) {
         _ = enqueueNotificationOperation { state, coordinator in
-            guard state.notificationSnapshotRevision == revision else { return }
+            guard state.notificationSnapshotRevision == revision,
+                  state.notificationCoverageMode == .importantOnly else { return }
             let result = await coordinator.process(
                 snapshot,
                 isAuthoritativeComplete: isAuthoritativeComplete,
-                shouldContinue: { state.notificationSnapshotRevision == revision }
+                shouldContinue: {
+                    state.notificationSnapshotRevision == revision
+                        && state.notificationCoverageMode == .importantOnly
+                }
             )
-            guard state.notificationSnapshotRevision == revision else { return }
+            guard state.notificationSnapshotRevision == revision,
+                  state.notificationCoverageMode == .importantOnly else { return }
             state.applyNotificationResult(result)
         }
     }
@@ -398,15 +406,20 @@ final class AppState {
     private func deliverLatestAcceptedSnapshotIfAuthorized(
         using notificationCoordinator: FleetNotificationCoordinator
     ) async {
-        guard notificationAuthorizationState == .authorized,
+        guard notificationCoverageMode == .importantOnly,
+              notificationAuthorizationState == .authorized,
               let snapshot = lastAcceptedFreshSnapshotForNotifications else { return }
         let revision = notificationSnapshotRevision
         let result = await notificationCoordinator.process(
             snapshot,
             isAuthoritativeComplete: lastAcceptedFreshSnapshotIsAuthoritativeComplete,
-            shouldContinue: { self.notificationSnapshotRevision == revision }
+            shouldContinue: {
+                self.notificationSnapshotRevision == revision
+                    && self.notificationCoverageMode == .importantOnly
+            }
         )
-        guard notificationSnapshotRevision == revision else { return }
+        guard notificationSnapshotRevision == revision,
+              notificationCoverageMode == .importantOnly else { return }
         applyNotificationResult(result)
     }
 
@@ -419,7 +432,8 @@ final class AppState {
 
     private func performEventsRefresh(revision: UInt64) async {
         guard let eventsClient, let eventsCursorStore else { return }
-        if eventsSeedRequired || eventsCursorStore.cursorSeq() == nil {
+        let storedCursor = eventsCursorStore.cursorSeq()
+        if eventsSeedRequired || storedCursor == nil {
             await seedEventsFromTail(
                 using: eventsClient,
                 cursorStore: eventsCursorStore,
@@ -427,7 +441,7 @@ final class AppState {
             )
             return
         }
-        guard let cursor = eventsCursorStore.cursorSeq() else { return }
+        guard let cursor = storedCursor else { return }
 
         do {
             let delivery = try await eventsClient.liveFleetEvents(since: cursor)
@@ -435,9 +449,10 @@ final class AppState {
                   notificationCoverageMode == .allMajorChanges else { return }
             switch delivery {
             case let .events(envelope):
-                if envelope.events.count > Self.maximumEventsPerPoll {
+                let incrementalEvents = envelope.events.filter { $0.seq > cursor }
+                if incrementalEvents.count > Self.maximumEventsPerPoll {
                     AppTelemetry.eventFeed(
-                        message: "backlog of \(envelope.events.count) exceeded \(Self.maximumEventsPerPoll); reseeding"
+                        message: "backlog of \(incrementalEvents.count) exceeded \(Self.maximumEventsPerPoll); reseeding"
                     )
                     eventsSeedRequired = true
                     await seedEventsFromTail(
@@ -447,17 +462,24 @@ final class AppState {
                     )
                     return
                 }
-                await processEventsEnvelope(envelope, revision: revision)
+                await processEventsEnvelope(
+                    incrementalEvents,
+                    envelopeCursorSeq: envelope.cursor.seq,
+                    revision: revision
+                )
             case let .error(envelope):
-                if envelope.error.code == "cursor_expired" {
-                    AppTelemetry.eventFeed(message: "cursor expired; reseeding from tail")
+                switch envelope.error.code {
+                case "cursor_expired", "invalid_cursor":
+                    AppTelemetry.eventFeed(
+                        message: "\(envelope.error.code); reseeding from tail"
+                    )
                     eventsSeedRequired = true
                     await seedEventsFromTail(
                         using: eventsClient,
                         cursorStore: eventsCursorStore,
                         revision: revision
                     )
-                } else {
+                default:
                     AppTelemetry.eventFeed(
                         message: "\(envelope.error.code): \(envelope.error.message); retrying after the current cadence"
                     )
@@ -465,6 +487,24 @@ final class AppState {
             }
         } catch is CancellationError {
             return
+        } catch let error as CrucibleCLIClientError {
+            guard eventsRevision == revision,
+                  notificationCoverageMode == .allMajorChanges else { return }
+            if case let .outputTooLarge(limit) = error {
+                AppTelemetry.eventFeed(
+                    message: "incremental output exceeded \(limit) bytes; reseeding from tail"
+                )
+                eventsSeedRequired = true
+                await seedEventsFromTail(
+                    using: eventsClient,
+                    cursorStore: eventsCursorStore,
+                    revision: revision
+                )
+            } else {
+                AppTelemetry.eventFeed(
+                    message: "poll failed: \(error.localizedDescription); retrying after the current cadence"
+                )
+            }
         } catch {
             AppTelemetry.eventFeed(
                 message: "poll failed: \(error.localizedDescription); retrying after the current cadence"
@@ -495,20 +535,32 @@ final class AppState {
             }
         } catch is CancellationError {
             return
+        } catch let error as CrucibleCLIClientError {
+            if case let .outputTooLarge(limit) = error {
+                guard eventsRevision == revision,
+                      notificationCoverageMode == .allMajorChanges else { return }
+                eventsSeedRequired = true
+                AppTelemetry.eventFeed(
+                    message: "tail reseed output exceeded \(limit) bytes; keeping reseed pending"
+                )
+            } else {
+                AppTelemetry.eventFeed(message: "seed failed: \(error.localizedDescription)")
+            }
         } catch {
             AppTelemetry.eventFeed(message: "seed failed: \(error.localizedDescription)")
         }
     }
 
     private func processEventsEnvelope(
-        _ envelope: LiveFleetEventsEnvelopeV1,
+        _ events: [LiveFleetEventV1],
+        envelopeCursorSeq: Int,
         revision: UInt64
     ) async {
         let task = enqueueNotificationOperation { state, coordinator in
             guard state.eventsRevision == revision,
                   state.notificationCoverageMode == .allMajorChanges else { return }
             let result = await coordinator.processEvents(
-                envelope.events,
+                events,
                 shouldContinue: {
                     state.eventsRevision == revision
                         && state.notificationCoverageMode == .allMajorChanges
@@ -518,15 +570,15 @@ final class AppState {
                   state.notificationCoverageMode == .allMajorChanges else { return }
             state.notificationAuthorizationState = result.authorizationState
             if !result.deliveryErrors.isEmpty {
-                state.notificationErrorMessage = "Some major fleet changes could not be delivered and will retry from the durable event cursor."
+                state.notificationErrorMessage = "Some fleet events could not be delivered and will retry from the durable event cursor."
             }
             if let newCursor = result.newCursor {
                 state.eventsCursorStore?.advance(to: newCursor)
             }
-            let fullyFinal = envelope.events.isEmpty
-                || result.newCursor == envelope.events.last?.seq
+            let fullyFinal = events.isEmpty
+                || result.newCursor == events.last?.seq
             if fullyFinal {
-                state.eventsCursorStore?.advance(to: envelope.cursor.seq)
+                state.eventsCursorStore?.advance(to: envelopeCursorSeq)
             }
         }
         await task?.value

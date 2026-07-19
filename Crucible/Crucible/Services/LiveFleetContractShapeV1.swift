@@ -47,10 +47,13 @@ nonisolated enum LiveFleetContractShapeV1 {
                 row,
                 at: path,
                 requiredKeys: [
-                    "schema", "seq", "recorded_at", "queue_dir", "id", "transition_class",
-                    "item_id", "attempt_id", "to_state", "action", "host", "importance",
+                    "schema", "seq", "recorded_at", "id", "transition_class", "item_id",
+                    "importance",
                 ],
-                optionalKeys: ["reason", "failure_class", "remediation"]
+                optionalKeys: [
+                    "queue_dir", "attempt_id", "to_state", "action", "host", "reason",
+                    "failure_class", "remediation",
+                ]
             )
             guard row["schema"] as? String == "crucible.live-fleet.transition.v1" else {
                 throw LiveFleetContractError.schemaViolation("\(path).schema has an unsupported value")

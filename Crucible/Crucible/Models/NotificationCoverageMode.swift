@@ -1,8 +1,7 @@
 import Foundation
 
-/// AC-6: the operator chooses between important-condition alerts only and
-/// alerts for all major state changes. All-major delivery additionally
-/// consumes the CLI's durable, replayable event feed from a persisted cursor.
+/// AC-6: the operator chooses between snapshot-backed important-condition
+/// alerts and the CLI's comprehensive, durable event feed.
 enum NotificationCoverageMode: String, CaseIterable, Identifiable, Sendable {
     case importantOnly = "important-only"
     case allMajorChanges = "all-major-changes"

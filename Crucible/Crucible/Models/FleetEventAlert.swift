@@ -22,6 +22,7 @@ nonisolated struct FleetEventAlert: Equatable, Sendable {
     func notificationPayload() -> NotificationPayload {
         NotificationPayload(
             episodeID: episodeID,
+            requestIdentifier: "event:\(episodeID)",
             title: title,
             subtitle: subtitle,
             body: body,

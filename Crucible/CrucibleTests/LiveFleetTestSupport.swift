@@ -87,6 +87,7 @@ actor StubCLIClient: CrucibleCLIClient {
     private let delay: Duration
     private let shouldFail: Bool
     private let eventDeliveries: [Int?: LiveFleetEventsDelivery]
+    private let eventErrors: [Int?: CrucibleCLIClientError]
     private(set) var calls = 0
     private(set) var eventCalls: [Int?] = []
 
@@ -94,12 +95,14 @@ actor StubCLIClient: CrucibleCLIClient {
         delivery: LiveFleetDelivery,
         delay: Duration = .zero,
         shouldFail: Bool = false,
-        eventDeliveries: [Int?: LiveFleetEventsDelivery] = [:]
+        eventDeliveries: [Int?: LiveFleetEventsDelivery] = [:],
+        eventErrors: [Int?: CrucibleCLIClientError] = [:]
     ) {
         self.delivery = delivery
         self.delay = delay
         self.shouldFail = shouldFail
         self.eventDeliveries = eventDeliveries
+        self.eventErrors = eventErrors
     }
 
     func liveFleetSnapshot() async throws -> LiveFleetDelivery {
@@ -114,6 +117,7 @@ actor StubCLIClient: CrucibleCLIClient {
         eventCalls.append(seq)
         if delay > .zero { try await Task.sleep(for: delay) }
         if shouldFail { throw StubError.failed }
+        if let error = eventErrors[seq] { throw error }
         guard let delivery = eventDeliveries[seq] else { throw StubError.failed }
         return delivery
     }

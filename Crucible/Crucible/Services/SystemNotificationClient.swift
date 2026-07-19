@@ -71,7 +71,7 @@ nonisolated final class UserNotificationClient: SystemNotificationClient, @unche
         content.sound = .default
         content.userInfo = payload.userInfo
         try await center.add(UNNotificationRequest(
-            identifier: payload.episodeID,
+            identifier: payload.requestIdentifier,
             content: content,
             trigger: nil
         ))
